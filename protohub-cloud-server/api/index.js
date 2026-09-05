@@ -1,0 +1,49 @@
+const path = require('path');
+const fs = require('fs');
+const ProtoServer = require('../server');
+
+const server = new ProtoServer();
+
+// In serverless environment, setup demo or working directory
+const workspaceDir = path.join(__dirname, '..', 'demo');
+if (!fs.existsSync(workspaceDir)) {
+  fs.mkdirSync(workspaceDir, { recursive: true });
+}
+
+// Ensure demo files exist
+const homeFile = path.join(workspaceDir, 'home.html');
+if (!fs.existsSync(homeFile)) {
+  const sampleHtml = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>智能选科推荐</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 20px; background: #f8fafc; color: #0f172a; }
+    .card { background: #fff; border-radius: 12px; padding: 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 16px; }
+    .hero { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; border-radius: 12px; padding: 20px; text-align: center; }
+    .btn { background: #22c55e; color: #fff; border: none; padding: 12px 24px; border-radius: 8px; font-weight: 700; width: 100%; cursor: pointer; font-size: 15px; }
+    .tag { display: inline-block; background: #e0f2fe; color: #0369a1; padding: 4px 8px; border-radius: 4px; font-size: 12px; margin-right: 6px; }
+  </style>
+</head>
+<body>
+  <div class="hero">
+    <h2 style="margin:0 0 8px 0;">🎯 新高考智能选科测评系统</h2>
+    <p style="margin:0; opacity:0.9; font-size:13px;">基于 300+ 院校历年录取大数据精准匹配选科方案</p>
+  </div>
+  <div class="card" style="margin-top:16px;">
+    <div style="font-weight:700; margin-bottom:12px;">🌟 推荐热门组合：</div>
+    <div style="margin-bottom:8px;"><span class="tag">物化生</span> 专业覆盖率 96.2% · 理工农医首选</div>
+    <div style="margin-bottom:8px;"><span class="tag">物化地</span> 专业覆盖率 93.8% · 赋分优势明显</div>
+    <div style="margin-bottom:16px;"><span class="tag">史政地</span> 纯文科经典 · 法学经管强项</div>
+    <button class="btn" onclick="alert('进入选科智能测评答题流程')">🚀 开始 3 分钟性格与潜能测评</button>
+  </div>
+</body>
+</html>`;
+  fs.writeFileSync(homeFile, sampleHtml, 'utf8');
+}
+
+server.setWorkspace(workspaceDir);
+
+module.exports = server.app;

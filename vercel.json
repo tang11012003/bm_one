@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index.js" },
+    { "source": "/prototype(.*)", "destination": "/api/index.js" },
+    { "source": "/annotation-editor/(.*)", "destination": "/api/index.js" }
+  ]
+}
