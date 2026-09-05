@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>__HUB_TITLE__ · 统一产品需求文档 (PRD) 工作台</title>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<style>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
+  background: #edf0f6;
+  color: #223355;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* 顶部极简浅色导航总控栏 */
+.top-hub-header {
+  height: 48px;
+  background: #ffffff;
+  border-bottom: 1px solid #dde1eb;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  flex-shrink: 0;
+  z-index: 100;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+}
+
+.hub-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.hub-tag {
+  background: #3388ff;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+}
+.hub-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+/* 页面切换 Tab 胶囊 */
+.hub-tabs-container {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  margin: 0 16px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.hub-tabs-container::-webkit-scrollbar { display: none; }
+
+.hub-tab-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 12px;
+  border-radius: 16px;
+  font-size: 12.5px;
+  font-weight: 500;
+  text-decoration: none;
+  background: #f8fafc;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+.hub-tab-chip:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+  border-color: #94a3b8;
+}
+.hub-tab-chip.is-active {
+  background: #3388ff;
+  color: #ffffff;
+  border-color: #3388ff;
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgba(51, 136, 255, 0.25);
+}
+
+.hub-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.hub-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+.hub-btn:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+.hub-btn.primary {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-color: #93c5fd;
+  font-weight: 600;
+}
+
+/* 主体容器：100% 呈现目标页面原汁原味的三栏审阅器 */
+.hub-viewport {
+  flex: 1;
+  width: 100%;
+  height: calc(100vh - 48px);
+  position: relative;
+  background: #edf0f6;
+}
+.hub-frame {
+  width: 100%;
+  height: 100%;
+  border: none;
+  outline: none;
+  display: block;
+}
+
+/* 页面管理弹窗 */
+.hub-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(2px);
+  z-index: 1000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.hub-modal.show { display: flex; }
+.hub-modal-box {
+  background: #ffffff;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 540px;
+  padding: 20px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+}
+.hub-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.hub-modal-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b;
+}
+.hub-modal-list {
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 6px;
+  margin-bottom: 14px;
+}
+.hub-modal-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 10px;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 13px;
+}
+.hub-modal-item:last-child { border-bottom: none; }
+.hub-input-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.hub-input {
+  padding: 6px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 12.5px;
+  outline: none;
+}
+.hub-input:focus { border-color: #3388ff; }
+</style>
+</head>
+<body>
+
+<!-- 顶部工作台总控栏 -->
+<header class="top-hub-header">
+  <div class="hub-brand">
+    <span class="hub-tag">PRD HUB</span>
+    <span class="hub-title">__HUB_TITLE__ · 产品文档交互工作台</span>
+  </div>
+
+  <!-- 页面切换胶囊 Tab 栏 -->
+  <nav class="hub-tabs-container" id="hubTabsBar">
+    <!-- 动态插入可切换页面 -->
+  </nav>
+
+  <!-- 工具栏 -->
+  <div class="hub-tools">
+    <button class="hub-btn primary" onclick="openModal()">
+      <span class="material-icons" style="font-size:15px">tune</span>
+      <span>页面管理(勾选/新增)</span>
+    </button>
+    <button class="hub-btn" onclick="reloadFrame()" title="刷新当前页面">
+      <span class="material-icons" style="font-size:15px">refresh</span>
+      <span>刷新</span>
+    </button>
+  </div>
+</header>
+
+<!-- 主视口：直接 100% 渲染目标页面的三栏审阅器 -->
+<main class="hub-viewport">
+  <iframe class="hub-frame" id="hubFrame" src="about:blank"></iframe>
+</main>
+
+<!-- 页面展示管理弹窗 -->
+<div class="hub-modal" id="hubModal" onclick="closeModal(event)">
+  <div class="hub-modal-box" onclick="event.stopPropagation()">
+    <div class="hub-modal-head">
+      <strong class="hub-modal-title">⚙️ 页面展示管理 (勾选向开发公开的页面)</strong>
+      <button style="border:none;background:none;font-size:18px;cursor:pointer;color:#64748b" onclick="closeModal()">&times;</button>
+    </div>
+
+    <div style="font-size:12px;color:#64748b;margin-bottom:10px">
+      勾选的页面会显示在顶部导航栏中，点击即可切换体验对应的完整三栏 PRD 原型：
+    </div>
+
+    <div class="hub-modal-list" id="modalPageList"></div>
+
+    <div class="hub-input-row">
+      <input type="text" class="hub-input" id="newPgName" placeholder="页面名称 (如: 错题本)" style="flex:1">
+      <input type="text" class="hub-input" id="newPgPath" placeholder="文件路径 (如: cuoti.html)" style="flex:1.2">
+      <button class="hub-btn primary" type="button" onclick="handleAddPage()">添加</button>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <button class="hub-btn" onclick="resetDefaults()">恢复默认清单</button>
+      <div style="display:flex;gap:8px">
+        <button class="hub-btn" onclick="closeModal()">取消</button>
+        <button class="hub-btn primary" onclick="savePages()">💾 保存并应用配置</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// 默认页面清单
+const UNIFIED_STORAGE_KEY = '__STORAGE_KEY__';
+const DEFAULT_PAGES = __DEFAULT_PAGES_JSON__;
+
+let pageList = [];
+try {
+  const saved = localStorage.getItem(UNIFIED_STORAGE_KEY) || localStorage.getItem('PRD_HUB_PAGES_V2');
+  pageList = saved ? JSON.parse(saved) : JSON.parse(JSON.stringify(DEFAULT_PAGES));
+} catch(e) {
+  pageList = JSON.parse(JSON.stringify(DEFAULT_PAGES));
+}
+
+let activePageId = DEFAULT_PAGES.length ? DEFAULT_PAGES[0].id : '';
+
+function init() {
+  renderTabs();
+  const hash = window.location.hash.replace('#page=', '').toLowerCase();
+  const matched = pageList.find(p => p.id.toLowerCase() === hash || p.path.toLowerCase().includes(hash));
+  if (matched && matched.visible) {
+    switchPage(matched.id);
+  } else {
+    const firstVis = pageList.find(p => p.visible) || pageList[0];
+    if (firstVis) switchPage(firstVis.id);
+  }
+}
+
+function renderTabs() {
+  const bar = document.getElementById('hubTabsBar');
+  bar.innerHTML = '';
+
+  pageList.filter(p => p.visible).forEach(p => {
+    const chip = document.createElement('button');
+    chip.className = `hub-tab-chip ${p.id === activePageId ? 'is-active' : ''}`;
+    chip.textContent = p.name;
+    chip.onclick = () => switchPage(p.id);
+    bar.appendChild(chip);
+  });
+}
+
+function switchPage(pageId) {
+  const pg = pageList.find(p => p.id === pageId);
+  if (!pg) return;
+
+  activePageId = pg.id;
+  window.location.hash = `page=${pg.id}`;
+
+  renderTabs();
+
+  const frame = document.getElementById('hubFrame');
+  if (!frame.src.endsWith(pg.path)) {
+    frame.src = pg.path;
+  }
+}
+
+function reloadFrame() {
+  const frame = document.getElementById('hubFrame');
+  frame.src = frame.src;
+}
+
+// 模态框管理
+function openModal() {
+  renderModalList();
+  document.getElementById('hubModal').classList.add('show');
+}
+function closeModal(e) {
+  if (e && e.target !== e.currentTarget) return;
+  document.getElementById('hubModal').classList.remove('show');
+}
+
+function renderModalList() {
+  const container = document.getElementById('modalPageList');
+  container.innerHTML = '';
+  pageList.forEach((p, idx) => {
+    const row = document.createElement('div');
+    row.className = 'hub-modal-item';
+    row.innerHTML = `
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="checkbox" ${p.visible ? 'checked' : ''} onchange="pageList[${idx}].visible = this.checked" />
+        <span style="font-weight:600;color:#1e293b">${p.name}</span>
+        <span style="color:#94a3b8;font-size:11px">(${p.path})</span>
+      </label>
+      <button style="border:none;background:none;color:#ef4444;cursor:pointer;font-size:14px" onclick="deletePage(${idx})">✕</button>
+    `;
+    container.appendChild(row);
+  });
+}
+
+function handleAddPage() {
+  const name = document.getElementById('newPgName').value.trim();
+  const path = document.getElementById('newPgPath').value.trim();
+  if (name && path) {
+    const id = path.replace('.html', '').replace(/[^a-zA-Z0-9_-]/g, '_');
+    pageList.push({ id, name, path, visible: true });
+    document.getElementById('newPgName').value = '';
+    document.getElementById('newPgPath').value = '';
+    renderModalList();
+  }
+}
+
+function deletePage(idx) {
+  pageList.splice(idx, 1);
+  renderModalList();
+}
+
+function savePages() {
+  try {
+    localStorage.setItem(UNIFIED_STORAGE_KEY, JSON.stringify(pageList));
+    localStorage.setItem('PRD_HUB_PAGES_V2', JSON.stringify(pageList));
+  } catch(e){}
+  renderTabs();
+  
+  // 向子页面 iframe 发送即时同步广播
+  const frame = document.getElementById('hubFrame');
+  if (frame && frame.contentWindow) {
+    frame.contentWindow.postMessage({ type: 'PRD_PAGES_UPDATED', pages: pageList }, '*');
+  }
+  
+  closeModal();
+}
+
+function resetDefaults() {
+  if (confirm('确定恢复默认页面清单吗？')) {
+    pageList = JSON.parse(JSON.stringify(DEFAULT_PAGES));
+    renderModalList();
+  }
+}
+
+window.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>

@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ProtoHub - 产品经理原型与需求变更工作台</title>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- 1. 欢迎/启动页 (Launcher Screen) -->
+  <div id="launcher-screen">
+    <div class="launcher-box">
+      <div class="launcher-brand">
+        <div class="launcher-logo-icon">🚀</div>
+        <div class="launcher-title">ProtoHub</div>
+      </div>
+      <div class="launcher-desc">
+        面向产品经理的原型交付与需求变更工作台<br>
+        支持多页面管理 · 所见即所得打点标注 · SDD 章节深链 · 一键离线打包
+      </div>
+      <button class="open-btn" id="btn-open-folder">
+        <span class="material-icons">folder_open</span>
+        <span>打开原型项目文件夹</span>
+      </button>
+      <input type="file" id="web-folder-input" webkitdirectory directory multiple style="display:none;">
+      
+      <button class="open-btn" id="btn-load-demo" style="background:#f8fafc; color:#1e293b; border:1px solid #cbd5e1; margin-top:10px;">
+        <span class="material-icons" style="color:#2563eb;">auto_awesome</span>
+        <span>✨ 载入内置示例项目 (快速体验)</span>
+      </button>
+
+      <div class="recent-projects-wrap">
+        <div class="recent-title">最近打开的项目</div>
+        <div class="recent-list" id="recent-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. 顶部总控导航栏 -->
+  <header class="studio-header">
+    <div class="brand-section">
+      <span class="brand-badge">ProtoHub</span>
+      <button class="tool-btn" id="btn-switch-project" title="打开或切换其他原型项目文件夹" style="padding: 4px 10px; font-size: 12px; background: #e0e7ff; color: #3730a3; border-color: #c7d2fe; font-weight: 600; gap: 4px;">
+        <span class="material-icons" style="font-size: 15px;">folder_open</span>
+        <span>切换项目</span>
+      </button>
+      <span class="project-folder-name" id="project-folder-name">未载入</span>
+    </div>
+
+    <!-- 多页面切换 Tab 胶囊 -->
+    <div class="tabs-scroll-area" id="tabs-container"></div>
+
+    <!-- 右侧功能工具组 -->
+    <div class="header-tools">
+      <!-- 设备模式切换 -->
+      <div class="device-toggle-group">
+        <button class="device-btn is-active" id="btn-view-mobile">📱 移动端</button>
+        <button class="device-btn" id="btn-view-pc">💻 PC</button>
+      </div>
+
+      <!-- 标注模式 -->
+      <button class="tool-btn" id="btn-toggle-inspect">
+        <span>🎯 标注模式</span>
+      </button>
+
+      <!-- 页面管理 -->
+      <button class="tool-btn" id="btn-manage-pages">
+        <span class="material-icons" style="font-size:16px;">view_carousel</span>
+        <span>页面管理</span>
+      </button>
+
+      <!-- 局域网分享 -->
+      <button class="tool-btn" id="btn-share-lan">
+        <span class="material-icons" style="font-size:16px;">qr_code_2</span>
+        <span>手机扫码</span>
+      </button>
+
+      <!-- 发布 GitHub Pages -->
+      <button class="tool-btn" id="btn-open-github" style="background:#0f172a; color:#f8fafc; border-color:#0f172a;">
+        <span class="material-icons" style="font-size:16px; color:#38bdf8;">cloud_upload</span>
+        <span>发布 GitHub</span>
+      </button>
+
+      <!-- 导出交付物 -->
+      <button class="tool-btn primary" id="btn-export-single">
+        <span class="material-icons" style="font-size:16px;">file_download</span>
+        <span>导出单文件</span>
+      </button>
+
+      <!-- 会员授权状态徽章 -->
+      <button class="tool-btn" id="btn-license-status" style="background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; border:none; font-weight:700; margin-left:4px;">
+        <span class="material-icons" style="font-size:16px;">verified</span>
+        <span id="license-badge-text">👑 授权激活</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- 3. 主体工作区 -->
+  <div class="studio-main-body">
+    <!-- 左侧业务说明与全局文档面板 -->
+    <aside class="studio-docs-sidebar" id="docs-sidebar">
+      <div class="docs-sidebar-head">
+        <div class="docs-title-row">
+          <span class="material-icons" style="font-size: 18px; color: #2563eb;">menu_book</span>
+          <span class="docs-sidebar-title">业务说明与全局文档</span>
+        </div>
+      </div>
+      <div class="docs-sidebar-content" id="docs-content-list"></div>
+    </aside>
+
+    <!-- 原型呈现画布 -->
+    <div class="prototype-canvas-wrapper">
+      <div class="device-frame-container mobile-view" id="device-frame-container">
+        <iframe id="preview-iframe" src="about:blank"></iframe>
+      </div>
+    </div>
+
+    <!-- 右侧需求与标注导览面板 -->
+    <aside class="studio-sidebar" id="annotation-sidebar">
+      <div class="sidebar-head">
+        <div class="sidebar-title-row">
+          <span class="sidebar-title">需求变更与功能导览</span>
+          <span class="badge-count" id="annotation-count">0 条</span>
+        </div>
+      </div>
+      <div class="sidebar-content" id="annotation-list"></div>
+    </aside>
+  </div>
+
+  <!-- 4. 模态弹窗: 录入/编辑标注 -->
+  <div class="modal-overlay hidden" id="modal-annotation">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <span class="modal-title" id="modal-anno-header-title">🎯 添加需求变更标注</span>
+        <span class="material-icons" id="btn-close-anno-modal" style="cursor:pointer;color:#94a3b8;">close</span>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">变更类型</label>
+          <select class="form-select" id="anno-type">
+            <option value="add">新增功能 / UI</option>
+            <option value="modify">修改逻辑 / 交互</option>
+            <option value="rule">业务规则 / 口径</option>
+            <option value="logic">前后端数据联动</option>
+            <option value="delete">下线 / 移除功能</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">变更标题</label>
+          <input type="text" class="form-input" id="anno-title" placeholder="例如：新增快捷拉黑与举报入口">
+        </div>
+        <div class="form-group">
+          <label class="form-label">选中元素选择器 (自动捕获)</label>
+          <input type="text" class="form-input" id="anno-selector" readonly style="background:#f1f5f9;color:#64748b;">
+        </div>
+        <div class="form-group">
+          <label class="form-label">需求说明与变更细节</label>
+          <textarea class="form-textarea" id="anno-desc" rows="4" placeholder="详细交代点击后的交互逻辑、状态流转或接口字段要求..."></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">关联 SDD / PRD 章节 ID (可选)</label>
+          <input type="text" class="form-input" id="anno-sdd" placeholder="如: sec_user_block_report">
+        </div>
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:space-between;">
+        <button class="tool-btn" id="btn-delete-anno" style="color:#ef4444; border-color:#fca5a5;">🗑️ 删除此标注</button>
+        <button class="tool-btn primary" id="btn-save-anno">保存并写回物理文件</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. 模态弹窗: 页面管理 (勾选/新增) -->
+  <div class="modal-overlay hidden" id="modal-pages">
+    <div class="modal-dialog" style="width: 540px;">
+      <div class="modal-header">
+        <span class="modal-title">📂 页面管理 (勾选可见与添加)</span>
+        <span class="material-icons" id="btn-close-pages-modal" style="cursor:pointer;color:#94a3b8;">close</span>
+      </div>
+      <div class="modal-body">
+        <div style="font-size:12.5px;color:#64748b;margin-bottom:8px;">勾选需要在顶部 Tab 演示的页面：</div>
+        <div id="page-manage-list" style="max-height: 220px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px;"></div>
+
+        <div style="margin-top:14px; padding-top:14px; border-top:1px solid #e2e8f0;">
+          <div style="font-size:12px; font-weight:600; color:#475569; margin-bottom:8px;">➕ 添加自定义页面路径 (如 /fenxi.html)</div>
+          <div style="display:flex; gap:8px;">
+            <input type="text" class="form-input" id="new-page-path" placeholder="页面相对路径，如 fenxi.html">
+            <input type="text" class="form-input" id="new-page-name" placeholder="显示名称，如 学习分析">
+            <button class="tool-btn" id="btn-add-custom-page" style="white-space:nowrap;">添加</button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="tool-btn primary" id="btn-save-pages-config">应用并保存设置</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6. 模态弹窗: 局域网分享二维码 -->
+  <div class="modal-overlay hidden" id="modal-share">
+    <div class="modal-dialog" style="width: 380px; text-align:center;">
+      <div class="modal-header">
+        <span class="modal-title">📱 手机扫码与局域网演示</span>
+        <span class="material-icons" id="btn-close-share-modal" style="cursor:pointer;color:#94a3b8;">close</span>
+      </div>
+      <div class="modal-body" style="align-items:center;">
+        <img id="share-qrcode-img" style="width: 220px; height: 220px; border-radius: 12px; border: 1px solid #e2e8f0; padding: 6px;" alt="QR Code">
+        <div style="font-size:13px; font-weight:600; color:#0f172a; margin-top:8px;" id="share-url-text">http://127.0.0.1:9000</div>
+        <div style="font-size:12px; color:#64748b; margin-top:4px;">确保手机与当前电脑处于同一局域网 WiFi</div>
+      </div>
+      <div class="modal-footer" style="justify-content:center;">
+        <button class="tool-btn" id="btn-copy-share-url">📋 复制链接</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7. 模态弹窗: 发布到 GitHub Pages -->
+  <div class="modal-overlay hidden" id="modal-github">
+    <div class="modal-dialog" style="width: 580px;">
+      <div class="modal-header">
+        <span class="modal-title">🌐 发布与分享到 GitHub Pages</span>
+        <span class="material-icons" id="btn-close-github-modal" style="cursor:pointer;color:#94a3b8;">close</span>
+      </div>
+      <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+        <!-- 步骤 1: GitHub 仓库配置 -->
+        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px; margin-bottom:12px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <span style="font-size:12.5px; font-weight:700; color:#1e293b;">1. 绑定 GitHub 仓库</span>
+            <button class="tool-btn" id="btn-gh-new-repo" style="font-size:11px; padding:2px 8px; background:#fff; color:#2563eb; border-color:#93c5fd;">
+              <span class="material-icons" style="font-size:13px;">open_in_new</span>
+              <span>前往 GitHub 新建仓库</span>
+            </button>
+          </div>
+
+          <div style="display:flex; gap:8px; margin-bottom:8px;">
+            <div style="flex:1;">
+              <label class="form-label" style="font-size:11.5px;">GitHub 用户名</label>
+              <input type="text" class="form-input" id="gh-user" placeholder="如 tang11012003">
+            </div>
+            <div style="flex:1;">
+              <label class="form-label" style="font-size:11.5px;">仓库名称 (Repo Name)</label>
+              <input type="text" class="form-input" id="gh-repo-name" placeholder="如 bm_one 或 gaokao-proto">
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom:0;">
+            <label class="form-label" style="font-size:11.5px;">完整 Git 仓库地址 (自动拼装)</label>
+            <input type="text" class="form-input" id="gh-repo-url" placeholder="https://github.com/用户名/仓库名.git">
+          </div>
+        </div>
+
+        <!-- 步骤 2: 认证与分支设置 -->
+        <div style="display:flex; gap:12px; margin-bottom:12px;">
+          <div class="form-group" style="flex:1; margin-bottom:0;">
+            <label class="form-label" style="font-size:11.5px;">发布分支 (默认无需改动)</label>
+            <input type="text" class="form-input" id="gh-branch" value="gh-pages" placeholder="gh-pages">
+          </div>
+          <div class="form-group" style="flex:1; margin-bottom:0;">
+            <label class="form-label" style="font-size:11.5px;">子目录路径 (可选)</label>
+            <input type="text" class="form-input" id="gh-subdir" placeholder="留空则部署至仓库根目录">
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom:12px;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <label class="form-label" style="font-size:11.5px;">Personal Access Token (PAT，推荐填写以自动开启 Pages)</label>
+            <button class="tool-btn" id="btn-gh-get-token" style="font-size:11px; padding:1px 6px; background:none; border:none; color:#2563eb; cursor:pointer;">
+              🔑 一键获取 Token ↗
+            </button>
+          </div>
+          <input type="password" class="form-input" id="gh-token" placeholder="ghp_xxxx (若本地已配置 SSH/Git 凭据可留空)">
+          <div style="font-size:11px; color:#94a3b8; margin-top:3px;">填写具备 repo 权限的 Token 可实现全自动免密推送并自动开通 Pages 服务。</div>
+        </div>
+
+        <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:8px 12px; font-size:12px; color:#1e40af; display:flex; justify-content:space-between; align-items:center;">
+          <span>📦 将发布 <b><span id="gh-page-count">0</span></b> 个已勾选页面（包含完整 PRD 交互导航）</span>
+          <span style="color:#2563eb; cursor:pointer; font-weight:600;" id="gh-open-manage-pages">调整勾选 ⚙️</span>
+        </div>
+
+        <!-- 部署状态及结果区域 -->
+        <div id="gh-deploy-status" class="hidden" style="margin-top:12px; padding:12px; border-radius:8px; font-size:12.5px;"></div>
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:space-between; align-items:center;">
+        <button class="tool-btn" id="btn-test-gh-config">🔍 检测 Git 环境</button>
+        <button class="tool-btn primary" id="btn-start-gh-deploy">🚀 立即打包并推送到 GitHub</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 8. 模态弹窗: 授权与卡密激活 -->
+  <div class="modal-overlay hidden" id="modal-license">
+    <div class="modal-dialog" style="width: 480px;">
+      <div class="modal-header">
+        <span class="modal-title">👑 ProtoHub 会员授权与激活</span>
+        <span class="material-icons" id="btn-close-license-modal" style="cursor:pointer;color:#94a3b8;">close</span>
+      </div>
+      <div class="modal-body">
+        <!-- 状态卡片 -->
+        <div id="license-status-card" style="border-radius:10px; padding:14px; margin-bottom:14px; font-size:13px;"></div>
+
+        <!-- 激活表单 -->
+        <div class="form-group" style="margin-bottom:10px;">
+          <label class="form-label" style="font-weight:700;">输入专属激活卡密</label>
+          <input type="text" class="form-input" id="input-license-key" placeholder="如 PH-PRO-20261004-XXXXXXXX" style="font-family:monospace; font-size:13.5px; letter-spacing:0.5px;">
+        </div>
+
+        <div id="license-msg-box" class="hidden" style="padding:10px; border-radius:8px; font-size:12px; margin-bottom:12px;"></div>
+
+        <!-- 购买/续费客服信息 -->
+        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px; font-size:12px; color:#475569;">
+          <div style="font-weight:700; color:#0f172a; margin-bottom:4px;">💬 购买月卡 / 续费客服支持</div>
+          <div>若需获取新卡密或延长使用时间，请联系管理员微信：</div>
+          <div style="font-weight:700; color:#2563eb; margin-top:2px; font-size:13px;" id="admin-contact-text">微信号：请联系为您分发本软件的专属客服</div>
+        </div>
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:space-between; align-items:center;">
+        <button class="tool-btn" id="btn-clear-license" style="font-size:12px; color:#ef4444; border-color:#fca5a5;">注销当前卡密</button>
+        <button class="tool-btn primary" id="btn-submit-license">🚀 立即验证激活</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="license.js"></script>
+  <script src="engine-assets.js"></script>
+  <script src="inspector.js"></script>
+  <script src="exporter.js"></script>
+  <script src="workbench.js"></script>
+</body>
+</html>
