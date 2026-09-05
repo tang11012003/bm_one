@@ -197,20 +197,37 @@
     </div>
   </div>
 
-  <!-- 6. 模态弹窗: 局域网分享二维码 -->
+  <!-- 6. 模态弹窗: 手机扫码与演示 -->
   <div class="modal-overlay hidden" id="modal-share">
-    <div class="modal-dialog" style="width: 380px; text-align:center;">
+    <div class="modal-dialog" style="width: 420px; text-align:center;">
       <div class="modal-header">
-        <span class="modal-title">📱 手机扫码与局域网演示</span>
+        <span class="modal-title">📱 手机扫码与在线演示</span>
         <span class="material-icons" id="btn-close-share-modal" style="cursor:pointer;color:#94a3b8;">close</span>
       </div>
-      <div class="modal-body" style="align-items:center;">
-        <img id="share-qrcode-img" style="width: 220px; height: 220px; border-radius: 12px; border: 1px solid #e2e8f0; padding: 6px;" alt="QR Code">
-        <div style="font-size:13px; font-weight:600; color:#0f172a; margin-top:8px;" id="share-url-text">http://127.0.0.1:9000</div>
-        <div style="font-size:12px; color:#64748b; margin-top:4px;">确保手机与当前电脑处于同一局域网 WiFi</div>
+      <div class="modal-body" style="align-items:center; gap: 12px;">
+        <!-- 演示模式切换 -->
+        <div style="display:flex; background:#f1f5f9; padding:3px; border-radius:8px; width:100%; border:1px solid #e2e8f0;">
+          <button id="share-tab-direct" style="flex:1; border:none; background:#fff; padding:6px; font-size:12px; font-weight:700; border-radius:6px; cursor:pointer; color:#2563eb; box-shadow:0 1px 3px rgba(0,0,0,0.06);">📱 当前页面直达演示</button>
+          <button id="share-tab-hub" style="flex:1; border:none; background:transparent; padding:6px; font-size:12px; font-weight:600; border-radius:6px; cursor:pointer; color:#64748b;">💻 多页面总控工作台</button>
+        </div>
+
+        <img id="share-qrcode-img" style="width: 190px; height: 190px; border-radius: 12px; border: 1px solid #e2e8f0; padding: 6px; background:#fff;" alt="QR Code">
+        
+        <div style="width:100%; text-align:left;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+            <label style="font-size:11.5px; font-weight:600; color:#475569;">分享访问链接 (支持自主修改域名/IP)</label>
+            <span id="share-page-tag" style="font-size:11px; background:#eff6ff; color:#2563eb; padding:1px 6px; border-radius:4px; font-weight:600;"></span>
+          </div>
+          <input type="text" class="form-input" id="share-url-input" style="font-size:12px; padding:6px 10px; width:100%; font-family:monospace;">
+        </div>
+
+        <div style="font-size:11.5px; color:#64748b; line-height:1.4; background:#f8fafc; padding:8px 10px; border-radius:6px; border:1px solid #e2e8f0; width:100%; text-align:left;">
+          💡 <b>提示：</b>若手机在同一 WiFi，扫码直接连通；若部署在 Vercel 云端，手机任何网络均可秒开。修改上方链接二维码将即时更新。
+        </div>
       </div>
-      <div class="modal-footer" style="justify-content:center;">
-        <button class="tool-btn" id="btn-copy-share-url">📋 复制链接</button>
+      <div class="modal-footer" style="justify-content:center; gap:10px;">
+        <button class="tool-btn primary" id="btn-copy-share-url">📋 复制直达链接</button>
+        <button class="tool-btn" id="btn-open-share-url" style="background:#fff; color:#2563eb; border-color:#93c5fd;">🌐 在新窗口打开</button>
       </div>
     </div>
   </div>

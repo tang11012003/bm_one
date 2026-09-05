@@ -57,11 +57,15 @@ class WorkbenchApp {
       btnClosePagesModal: document.getElementById('btn-close-pages-modal'),
       btnSavePagesConfig: document.getElementById('btn-save-pages-config'),
 
-      // 局域网分享弹窗
+      // 手机扫码与演示弹窗
       modalShare: document.getElementById('modal-share'),
       qrImage: document.getElementById('share-qrcode-img'),
-      shareUrlText: document.getElementById('share-url-text'),
+      shareUrlInput: document.getElementById('share-url-input'),
+      sharePageTag: document.getElementById('share-page-tag'),
+      shareTabDirect: document.getElementById('share-tab-direct'),
+      shareTabHub: document.getElementById('share-tab-hub'),
       btnCopyShareUrl: document.getElementById('btn-copy-share-url'),
+      btnOpenShareUrl: document.getElementById('btn-open-share-url'),
       btnCloseShareModal: document.getElementById('btn-close-share-modal'),
 
       // GitHub Pages 弹窗
@@ -195,12 +199,31 @@ class WorkbenchApp {
     this.dom.btnAddCustomPage.addEventListener('click', () => this.addCustomPage());
     this.dom.btnSavePagesConfig.addEventListener('click', () => this.savePagesConfig());
 
-    // 局域网分享弹窗
+    // 手机扫码与演示弹窗
     this.dom.btnShareLan.addEventListener('click', () => this.openShareModal());
     this.dom.btnCloseShareModal.addEventListener('click', () => this.dom.modalShare.classList.add('hidden'));
     this.dom.btnCopyShareUrl.addEventListener('click', () => {
-      navigator.clipboard.writeText(this.dom.shareUrlText.textContent);
-      alert('分享链接已复制到剪贴板！');
+      const val = this.dom.shareUrlInput ? this.dom.shareUrlInput.value.trim() : '';
+      if (val) {
+        navigator.clipboard.writeText(val);
+        alert('🎉 直达链接已复制到剪贴板！');
+      }
+    });
+    if (this.dom.btnOpenShareUrl) {
+      this.dom.btnOpenShareUrl.addEventListener('click', () => {
+        const val = this.dom.shareUrlInput ? this.dom.shareUrlInput.value.trim() : '';
+        if (val) window.open(val, '_blank');
+      });
+    }
+
+    // 监听 URL Hash 变化实现多页面无刷新同步
+    window.addEventListener('hashchange', () => {
+      if (this.projectInfo?.pages) {
+        const target = this.checkInitialHashPage(this.projectInfo.pages);
+        if (target && target.id !== this.activePage?.id) {
+          this.switchPage(target, false);
+        }
+      }
     });
 
     // GitHub Pages 弹窗
@@ -512,12 +535,23 @@ class WorkbenchApp {
     this.dom.folderName.textContent = name;
     this.dom.folderName.title = name;
     this.renderTabs();
-    const visiblePages = pages.filter(p => p.visible !== false);
-    const targetPage = visiblePages[0] || pages[0];
+    const targetPage = this.checkInitialHashPage(pages);
     if (targetPage) {
-      this.switchPage(targetPage);
+      this.switchPage(targetPage, false);
     }
     if (this.dom.launcherScreen) this.dom.launcherScreen.classList.add('hidden');
+  }
+
+  checkInitialHashPage(pages) {
+    if (!pages || pages.length === 0) return null;
+    const hash = (typeof window !== 'undefined' && window.location.hash) ? window.location.hash.replace(/^#page=/, '').trim() : '';
+    if (hash) {
+      const decoded = decodeURIComponent(hash);
+      const match = pages.find(p => p.id === decoded || p.path === decoded || p.path.endsWith(decoded) || p.name === decoded);
+      if (match && match.visible !== false) return match;
+    }
+    const visible = pages.filter(p => p.visible !== false);
+    return visible[0] || pages[0];
   }
 
   loadDemoProject() {
@@ -658,9 +692,9 @@ class WorkbenchApp {
     this.dom.folderName.textContent = folderName;
     this.dom.folderName.title = this.currentWorkspace;
     this.renderTabs();
-    const visiblePages = this.projectInfo.pages.filter(p => p.visible !== false);
-    if (visiblePages.length > 0) {
-      this.switchPage(visiblePages[0]);
+    const targetPage = this.checkInitialHashPage(this.projectInfo.pages);
+    if (targetPage) {
+      this.switchPage(targetPage, false);
     }
   }
 
@@ -684,8 +718,15 @@ class WorkbenchApp {
     });
   }
 
-  switchPage(page) {
+  switchPage(page, updateHash = true) {
     this.activePage = page;
+    if (updateHash && typeof window !== 'undefined' && page?.id) {
+      try {
+        history.replaceState(null, '', '#page=' + encodeURIComponent(page.id));
+      } catch (e) {
+        window.location.hash = 'page=' + encodeURIComponent(page.id);
+      }
+    }
     this.renderTabs();
     this.updateIframeSrc();
     this.renderGlobalDocs();
@@ -913,19 +954,87 @@ class WorkbenchApp {
     if (firstVisible) this.switchPage(firstVisible);
   }
 
+  updateShareQrCode(url) {
+    if (!this.dom.qrImage) return;
+    const cleanUrl = url.trim();
+    this.dom.qrImage.src = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(cleanUrl)}`;
+  }
+
   async openShareModal() {
     if (!this.checkLicenseGuard('手机扫码分享')) return;
+    const curOrigin = (typeof window !== 'undefined' && window.location.origin && window.location.origin !== 'null') ? window.location.origin : (this.apiBase || 'http://127.0.0.1:9000');
+    const curPath = window.location.pathname || '/';
+    const activeId = this.activePage?.id || '';
+
+    let directUrl = '';
+    let hubUrl = '';
+
     if (window.electronAPI) {
-      const idParam = this.activePage ? `?id=${encodeURIComponent(this.activePage.id)}` : '';
-      const res = await fetch(`${this.apiBase}/api/share/info${idParam}`);
-      const data = await res.json();
-      this.dom.qrImage.src = data.qrDataUrl;
-      this.dom.shareUrlText.textContent = data.shareUrl;
-    } else {
-      const curUrl = window.location.href;
-      this.dom.qrImage.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(curUrl)}`;
-      this.dom.shareUrlText.textContent = curUrl;
+      try {
+        const idParam = this.activePage ? `?id=${encodeURIComponent(this.activePage.id)}` : '';
+        const res = await fetch(`${this.apiBase}/api/share/info${idParam}`);
+        const data = await res.json();
+        directUrl = data.shareUrl;
+        hubUrl = directUrl.split('#')[0];
+      } catch (e) {}
     }
+
+    if (!directUrl) {
+      directUrl = activeId ? `${curOrigin}${curPath}#page=${encodeURIComponent(activeId)}` : `${curOrigin}${curPath}`;
+      hubUrl = `${curOrigin}${curPath}`;
+    }
+
+    this.shareMode = 'direct';
+    this.shareUrls = {
+      direct: directUrl,
+      hub: hubUrl
+    };
+
+    if (this.dom.sharePageTag) {
+      this.dom.sharePageTag.textContent = this.activePage ? `当前: ${this.activePage.name}` : '';
+    }
+
+    const setShareTab = (mode) => {
+      this.shareMode = mode;
+      if (this.dom.shareTabDirect && this.dom.shareTabHub) {
+        if (mode === 'direct') {
+          this.dom.shareTabDirect.style.background = '#fff';
+          this.dom.shareTabDirect.style.color = '#2563eb';
+          this.dom.shareTabDirect.style.boxShadow = '0 1px 3px rgba(0,0,0,0.06)';
+          this.dom.shareTabHub.style.background = 'transparent';
+          this.dom.shareTabHub.style.color = '#64748b';
+          this.dom.shareTabHub.style.boxShadow = 'none';
+        } else {
+          this.dom.shareTabHub.style.background = '#fff';
+          this.dom.shareTabHub.style.color = '#2563eb';
+          this.dom.shareTabHub.style.boxShadow = '0 1px 3px rgba(0,0,0,0.06)';
+          this.dom.shareTabDirect.style.background = 'transparent';
+          this.dom.shareTabDirect.style.color = '#64748b';
+          this.dom.shareTabDirect.style.boxShadow = 'none';
+        }
+      }
+      const targetUrl = this.shareUrls[mode];
+      if (this.dom.shareUrlInput) {
+        this.dom.shareUrlInput.value = targetUrl;
+      }
+      this.updateShareQrCode(targetUrl);
+    };
+
+    if (this.dom.shareTabDirect) {
+      this.dom.shareTabDirect.onclick = () => setShareTab('direct');
+    }
+    if (this.dom.shareTabHub) {
+      this.dom.shareTabHub.onclick = () => setShareTab('hub');
+    }
+
+    if (this.dom.shareUrlInput) {
+      this.dom.shareUrlInput.oninput = () => {
+        const val = this.dom.shareUrlInput.value.trim();
+        if (val) this.updateShareQrCode(val);
+      };
+    }
+
+    setShareTab('direct');
     this.dom.modalShare.classList.remove('hidden');
   }
 
