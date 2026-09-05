@@ -42,6 +42,10 @@
   <header class="studio-header">
     <div class="brand-section">
       <span class="brand-badge">ProtoHub</span>
+      <button class="tool-btn" id="btn-switch-project" title="打开或切换其他原型项目文件夹" style="padding: 4px 10px; font-size: 12px; background: #e0e7ff; color: #3730a3; border-color: #c7d2fe; font-weight: 600; gap: 4px;">
+        <span class="material-icons" style="font-size: 15px;">folder_open</span>
+        <span>切换项目</span>
+      </button>
       <span class="project-folder-name" id="project-folder-name">未载入</span>
     </div>
 
@@ -95,6 +99,17 @@
 
   <!-- 3. 主体工作区 -->
   <div class="studio-main-body">
+    <!-- 左侧业务说明与全局文档面板 -->
+    <aside class="studio-docs-sidebar" id="docs-sidebar">
+      <div class="docs-sidebar-head">
+        <div class="docs-title-row">
+          <span class="material-icons" style="font-size: 18px; color: #2563eb;">menu_book</span>
+          <span class="docs-sidebar-title">业务说明与全局文档</span>
+        </div>
+      </div>
+      <div class="docs-sidebar-content" id="docs-content-list"></div>
+    </aside>
+
     <!-- 原型呈现画布 -->
     <div class="prototype-canvas-wrapper">
       <div class="device-frame-container mobile-view" id="device-frame-container">
@@ -103,7 +118,7 @@
     </div>
 
     <!-- 右侧需求与标注导览面板 -->
-    <aside class="studio-sidebar">
+    <aside class="studio-sidebar" id="annotation-sidebar">
       <div class="sidebar-head">
         <div class="sidebar-title-row">
           <span class="sidebar-title">需求变更与功能导览</span>
@@ -307,6 +322,7 @@
   </div>
 
   <script src="license.js"></script>
+  <script src="engine-assets.js"></script>
   <script src="inspector.js"></script>
   <script src="exporter.js"></script>
   <script src="workbench.js"></script>
