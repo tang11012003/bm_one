@@ -1,0 +1,15 @@
+{
+  "name": "ProtoHub 原型需求交付工作台",
+  "short_name": "ProtoHub",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "https://api.iconify.design/material-symbols:rocket-launch.svg?color=%232563eb",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}
