@@ -219,13 +219,20 @@ html.protoMobile-ready body {
   transition: transform 180ms ease;
 }
 
-.protoMobile-switch[aria-checked="true"] { background: var(--protoMobile-accent); }
-.protoMobile-switch[aria-checked="true"]::after { transform: translateX(16px); }
+.protoMobile-notes-panel {
+  display: flex !important;
+  flex-direction: column !important;
+}
 
 .protoMobile-note-list {
-  height: calc(100% - 56px);
+  flex: 1;
+  min-height: 0;
+  height: auto;
   padding: 12px;
-  overflow: auto;
+  padding-bottom: 60px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
 }
 
 .protoMobile-note-card {

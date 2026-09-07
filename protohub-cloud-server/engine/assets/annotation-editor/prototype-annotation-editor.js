@@ -135,7 +135,7 @@
 
   function mobileScopeNode(appRoot, noteScope, context) {
     if (context && matchesScope(noteScope, context.scope)) return context.scopeNode;
-    const nodes = appRoot && appRoot.querySelectorAll ? Array.from(appRoot.querySelectorAll("[data-proto-scope]")) : [];
+    const nodes = Array.from(appRoot.querySelectorAll("[data-proto-scope]"));
     const exact = nodes.find(node => node.dataset.protoScope === noteScope);
     if (exact) return exact;
     if (!String(noteScope).startsWith("page:")) return null;
@@ -473,29 +473,29 @@
 
   function createAdapter() {
     if (state.platform === "mobile") {
-      const stage = document.querySelector(".protoMobile-stage") || document.getElementById("protoMobileStage");
-      const appRoot = document.querySelector("[data-proto-app]") || document.getElementById("app") || document.getElementById("protoMobileDevice") || document.body;
+      const stage = document.querySelector(".protoMobile-stage");
+      const appRoot = document.querySelector("[data-proto-app]");
       return {
         platform: "mobile",
         stage,
         appRoot,
         businessRoot: appRoot,
         leftPanel: document.getElementById("protoMobileDocsPanel") || document.querySelector(".protoMobile-docs-panel"),
-        leftHeader: document.querySelector(".protoMobile-docs-panel .protoMobile-panel-header") || document.querySelector(".protoMobile-docs-panel"),
-        docsNav: document.getElementById("protoMobileDocNav") || document.querySelector(".protoMobile-doc-nav"),
-        docsBody: document.getElementById("protoMobileDocContent") || document.querySelector(".protoMobile-doc-content"),
-        rightPanel: document.querySelector(".protoMobile-notes-panel") || document.getElementById("protoMobileNotesPanel"),
+        leftHeader: document.querySelector(".protoMobile-docs-panel .protoMobile-panel-header"),
+        docsNav: document.getElementById("protoMobileDocNav"),
+        docsBody: document.getElementById("protoMobileDocContent"),
+        rightPanel: document.querySelector(".protoMobile-notes-panel"),
         getContext() {
-          const candidates = appRoot && appRoot.querySelectorAll ? Array.from(appRoot.querySelectorAll("[data-proto-scope]"))
+          const candidates = Array.from(appRoot.querySelectorAll("[data-proto-scope]"))
             .map((node, index) => ({ node, index, scope: node.dataset.protoScope, layer: Number(node.dataset.protoLayer) || 0 }))
-            .filter(item => item.scope && isRenderable(item.node)) : [];
-          if (appRoot && appRoot.matches && appRoot.matches("[data-proto-scope]") && isRenderable(appRoot)) {
+            .filter(item => item.scope && isRenderable(item.node));
+          if (appRoot.matches("[data-proto-scope]") && isRenderable(appRoot)) {
             candidates.unshift({ node: appRoot, index: -1, scope: appRoot.dataset.protoScope, layer: Number(appRoot.dataset.protoLayer) || 0 });
           }
           candidates.sort((a, b) => a.layer - b.layer || a.index - b.index);
           const current = candidates[candidates.length - 1] || { node: appRoot, scope: "page:default" };
-          const title = current.node?.querySelector ? current.node.querySelector("h1,h2,.navbar-title,.nav-title,.page-title")?.textContent.trim() : "";
-          const activeTab = current.scope.split(":").length >= 3 && current.node?.querySelector
+          const title = current.node.querySelector("h1,h2,.navbar-title,.nav-title,.page-title")?.textContent.trim();
+          const activeTab = current.scope.split(":").length >= 3
             ? current.node.querySelector('[role="tab"].is-active,.tabs-bar .tab-item.is-active')?.textContent.trim()
             : "";
           const label = title && activeTab ? `${title} · ${activeTab}` : title;
@@ -508,32 +508,32 @@
       };
     }
 
-    const workspace = document.getElementById("protoWebReviewWorkspace") || document.querySelector(".protoWeb-review-workspace");
-    const appRoot = document.getElementById("protoWebReviewPrototypeFrame") || document.querySelector("[data-proto-app]") || document.getElementById("app") || document.body;
+    const workspace = document.getElementById("protoWebReviewWorkspace");
+    const appRoot = document.getElementById("protoWebReviewPrototypeFrame") || document.body;
     return {
       platform: "web",
       stage: workspace,
       appRoot,
       businessRoot: appRoot,
       leftPanel: document.querySelector(".protoWeb-review-left"),
-      leftHeader: document.querySelector(".protoWeb-review-left .protoWeb-review-side-header") || document.querySelector(".protoWeb-review-left"),
+      leftHeader: document.querySelector(".protoWeb-review-left .protoWeb-review-side-header"),
       docsNav: document.getElementById("protoWebReviewDocsNav"),
       docsBody: document.getElementById("protoWebReviewDocsBody"),
       rightPanel: document.querySelector(".protoWeb-review-right"),
       getContext() {
-        const declared = appRoot && appRoot.querySelectorAll ? Array.from(appRoot.querySelectorAll("[data-proto-scope]"))
+        const declared = Array.from(appRoot.querySelectorAll("[data-proto-scope]"))
           .map((node, index) => ({
             node,
             index,
             scope: node.dataset.protoScope,
             layer: Number(node.dataset.protoLayer) || 0
           }))
-          .filter(item => item.scope && isRenderable(item.node)) : [];
+          .filter(item => item.scope && isRenderable(item.node));
         const declaredOverlays = declared.filter(item => item.layer > 0 || !item.scope.startsWith("page:"));
         if (declaredOverlays.length) {
           declaredOverlays.sort((a, b) => a.layer - b.layer || a.index - b.index);
           const current = declaredOverlays[declaredOverlays.length - 1];
-          const title = current.node?.querySelector ? current.node.querySelector(".drawer-title,.modal-title,.dialog-title,h1,h2")?.textContent.trim() : "";
+          const title = current.node.querySelector(".drawer-title,.modal-title,.dialog-title,h1,h2")?.textContent.trim();
           return {
             scope: current.scope,
             scopeNode: current.node,
@@ -546,8 +546,8 @@
         if (declaredPages.length) {
           declaredPages.sort((a, b) => a.layer - b.layer || a.index - b.index);
           const current = declaredPages[declaredPages.length - 1];
-          const label = current.node?.dataset?.title
-            || (current.node?.querySelector ? current.node.querySelector(".page-title,h1,h2")?.childNodes[0]?.textContent.trim() : null)
+          const label = current.node.dataset.title
+            || current.node.querySelector(".page-title,h1,h2")?.childNodes[0]?.textContent.trim()
             || current.scope.replace(/^page:/, "");
           return { scope: current.scope, scopeNode: current.node, label };
         }
@@ -1112,7 +1112,7 @@
           || page?.querySelector(".page-title,h1,h2")?.childNodes[0]?.textContent.trim()
           || pageKey;
       }
-      const candidates = state.adapter?.businessRoot?.querySelectorAll ? Array.from(state.adapter.businessRoot.querySelectorAll('[data-proto-scope^="page:"]')) : [];
+      const candidates = Array.from(state.adapter.businessRoot.querySelectorAll('[data-proto-scope^="page:"]'));
       const page = candidates.find(node => String(node.dataset.protoScope || "").split(":")[1] === pageKey);
       const pageTitle = page?.querySelector(".navbar-title,.nav-title,.page-title,h1,h2")?.textContent.trim() || pageKey;
       const tabKey = scope.split(":")[2];
@@ -1130,9 +1130,8 @@
       return pageTitle;
     }
     const [type, name] = String(scope || "其他").split(":");
-    const scopeNode = state.adapter?.businessRoot?.querySelectorAll
-      ? Array.from(state.adapter.businessRoot.querySelectorAll("[data-proto-scope]")).find(node => node.dataset.protoScope === scope)
-      : null;
+    const scopeNode = Array.from(state.adapter.businessRoot.querySelectorAll("[data-proto-scope]"))
+      .find(node => node.dataset.protoScope === scope);
     const title = scopeNode?.querySelector(".drawer-title,.sheet-title,.sheet-head b,.dialog-title,.modal-title,.panel-title,.navbar-title,.nav-title,.page-title,h1,h2")?.textContent.trim();
     if (title) return title;
     if (state.platform === "mobile") {
@@ -1874,12 +1873,8 @@
     observer.observe(document.body, { subtree: true, attributes: true, attributeFilter: ["class", "hidden", "style", "aria-hidden", "data-proto-scope", "data-proto-layer"] });
     if (window.ResizeObserver) {
       const resizeObserver = new ResizeObserver(() => scheduleContextUpdate(true));
-      if (state.adapter && state.adapter.businessRoot && state.adapter.businessRoot instanceof Element) {
-        resizeObserver.observe(state.adapter.businessRoot);
-      }
-      if (state.adapter && state.adapter.stage && state.adapter.stage !== state.adapter.businessRoot) {
-        resizeObserver.observe(state.adapter.stage);
-      }
+      resizeObserver.observe(state.adapter.businessRoot);
+      if (state.adapter.stage && state.adapter.stage !== state.adapter.businessRoot) resizeObserver.observe(state.adapter.stage);
     }
   }
 

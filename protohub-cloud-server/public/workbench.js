@@ -940,6 +940,20 @@ class WorkbenchApp {
       }
     });
 
+    window.__PRD_PAGES_REGISTRY__ = this.projectInfo.pages;
+    try {
+      localStorage.setItem('PRD_PAGES_REGISTRY_UNIFIED', JSON.stringify(this.projectInfo.pages));
+      localStorage.setItem('PRD_HUB_PAGES_V2', JSON.stringify(this.projectInfo.pages));
+    } catch (e) {}
+
+    // 通知内部 iframe 同步最新页面清单
+    try {
+      this.dom.previewIframe.contentWindow?.postMessage({
+        type: 'PRD_PAGES_UPDATED',
+        pages: this.projectInfo.pages
+      }, '*');
+    } catch (e) {}
+
     if (window.electronAPI) {
       await fetch(`${this.apiBase}/api/project/pages`, {
         method: 'POST',
@@ -950,8 +964,12 @@ class WorkbenchApp {
 
     this.dom.modalPages.classList.add('hidden');
     this.renderTabs();
-    const firstVisible = this.projectInfo.pages.find(p => p.visible !== false);
-    if (firstVisible) this.switchPage(firstVisible);
+    if (this.activePage && this.activePage.visible === false) {
+      const firstVisible = this.projectInfo.pages.find(p => p.visible !== false);
+      if (firstVisible) this.switchPage(firstVisible);
+    } else {
+      this.updateIframeSrc();
+    }
   }
 
   updateShareQrCode(url) {

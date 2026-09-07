@@ -977,40 +977,86 @@
     if (!navBar || !tabsWrap) return;
 
     const UNIFIED_STORAGE_KEY = "PRD_PAGES_REGISTRY_UNIFIED";
-    const DEFAULT_PAGES = [
-      { id: "gerenzhuye", name: "个人主页", path: "gerenzhuye.html", visible: true },
-      { id: "sixin", name: "私信交流", path: "sixin.html", visible: true },
-      { id: "fenxi", name: "学情分析", path: "fenxi.html", visible: true },
-      { id: "fenxibaogao", name: "诊断报告", path: "fenxibaogao.html", visible: true },
-      { id: "shequ", name: "社区动态", path: "shequ.html", visible: true },
-      { id: "wode", name: "个人中心", path: "wode.html", visible: true }
-    ];
 
     let pages = [];
     function loadPagesFromStorage() {
+      // 1. 优先读取父级工作台（ProtoHub 主窗口）注册表或当前项目信息
+      try {
+        if (window.parent && window.parent !== window) {
+          if (Array.isArray(window.parent.__PRD_PAGES_REGISTRY__) && window.parent.__PRD_PAGES_REGISTRY__.length > 0) {
+            pages = window.parent.__PRD_PAGES_REGISTRY__.map(p => ({
+              id: p.id || (p.path ? p.path.replace(/\.[^/.]+$/, "") : "page"),
+              name: p.name || p.title || p.path,
+              path: p.path || p.fileName || p.relativePath,
+              visible: p.visible !== false
+            }));
+            return;
+          }
+          if (Array.isArray(window.parent.app?.projectInfo?.pages) && window.parent.app.projectInfo.pages.length > 0) {
+            pages = window.parent.app.projectInfo.pages.map(p => ({
+              id: p.id || (p.path ? p.path.replace(/\.[^/.]+$/, "") : "page"),
+              name: p.name || p.title || p.path,
+              path: p.path || p.fileName || p.relativePath,
+              visible: p.visible !== false
+            }));
+            return;
+          }
+        }
+      } catch (e) {}
+
+      // 2. 读取原型内嵌数据
+      if (Array.isArray(annotationData.pages) && annotationData.pages.length > 0) {
+        pages = annotationData.pages.map(p => ({ ...p, visible: p.visible !== false }));
+        return;
+      }
+
+      // 3. 读取本地统一存储
       try {
         const saved = localStorage.getItem(UNIFIED_STORAGE_KEY) || localStorage.getItem("PRD_HUB_PAGES_V2");
-        pages = saved ? JSON.parse(saved) : DEFAULT_PAGES;
-      } catch (e) {
-        pages = DEFAULT_PAGES;
-      }
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            pages = parsed.map(p => ({ ...p, visible: p.visible !== false }));
+            return;
+          }
+        }
+      } catch (e) {}
+
+      pages = [];
     }
     loadPagesFromStorage();
 
-    const curFile = window.location.pathname.split("/").pop() || "gerenzhuye.html";
+    const curFile = window.location.pathname.split("/").pop() || "index.html";
 
-    function renderTabs() {
-      loadPagesFromStorage();
+    function renderTabs(customPages) {
+      if (Array.isArray(customPages)) {
+        pages = customPages.map(p => ({ ...p, visible: p.visible !== false }));
+      } else {
+        loadPagesFromStorage();
+      }
       tabsWrap.innerHTML = "";
-      pages.filter(p => p.visible).forEach(p => {
+      // 严格仅展示勾选（visible !== false）的页面
+      const visiblePages = (pages || []).filter(p => p && p.visible !== false);
+      if (visiblePages.length <= 1) {
+        navBar.style.display = "none";
+        return;
+      }
+      navBar.style.display = "flex";
+      visiblePages.forEach(p => {
         const chip = document.createElement("a");
-        chip.className = `protoMobile-page-tab-chip ${curFile.toLowerCase() === p.path.toLowerCase() ? "is-active" : ""}`;
-        chip.href = p.path;
-        chip.textContent = p.name;
+        const isActive = curFile.toLowerCase() === (p.path || "").toLowerCase() || (p.id && curFile.toLowerCase().includes(p.id.toLowerCase()));
+        chip.className = `protoMobile-page-tab-chip ${isActive ? "is-active" : ""}`;
+        chip.href = p.path || "#";
+        chip.textContent = p.name || p.title || p.id;
         chip.onclick = (e) => {
+          e.preventDefault();
           if (window.parent && window.parent !== window && typeof window.parent.switchPage === "function") {
-            e.preventDefault();
-            window.parent.switchPage(p.id || p.path.replace(".html", ""));
+            window.parent.switchPage(p.id || p.path);
+          } else if (window.parent && window.parent.app && typeof window.parent.app.switchPage === "function") {
+            const target = window.parent.app.projectInfo?.pages?.find(item => item.id === p.id || item.path === p.path);
+            if (target) window.parent.app.switchPage(target);
+          } else {
+            window.location.href = p.path;
           }
         };
         tabsWrap.appendChild(chip);
@@ -1022,7 +1068,7 @@
     // 监听父级工作台或其它窗口发来的实时同步通知
     window.addEventListener("message", (e) => {
       if (e.data && (e.data.type === "PRD_PAGES_UPDATED" || e.data.type === "SYNC_PAGES")) {
-        renderTabs();
+        renderTabs(e.data.pages);
       }
     });
     window.addEventListener("storage", (e) => {

@@ -322,24 +322,24 @@
   }
 
   function notesForScope(scope) {
-    const acceptedScopes = new Set([scope, `${scope}:*`, "page:*", "page:default", ""]);
+    const acceptedScopes = new Set([scope, `${scope}:*`]);
     if (scope.startsWith("page:")) {
       const parts = scope.split(":");
       if (parts.length >= 2) {
         acceptedScopes.add(`${parts.slice(0, 2).join(":")}:*`);
         acceptedScopes.add(parts.slice(0, 2).join(":"));
       }
+      acceptedScopes.add("page:*");
     }
     return annotations.filter(note => {
-      if (!note.scope || note.scope === "page:default" || note.scope === "page:*") return true;
       if (acceptedScopes.has(note.scope)) return true;
       if (String(note.scope || "").startsWith(scope)) return true;
       if (scope.startsWith("page:") && String(note.scope || "").startsWith("page:")) {
         const p1 = scope.split(":")[1];
         const p2 = String(note.scope).split(":")[1];
-        return !p1 || !p2 || p1 === p2 || p1 === 'default' || p2 === 'default';
+        return p1 && p1 === p2;
       }
-      return true;
+      return false;
     });
   }
 
@@ -980,16 +980,16 @@
 
     let pages = [];
     function loadPagesFromStorage() {
-      // 1. 优先读取原型内嵌数据
-      if (Array.isArray(annotationData.pages) && annotationData.pages.length > 0) {
-        pages = annotationData.pages;
-        return;
-      }
-      // 2. 读取父级工作台或全局注册表
+      // 1. 优先读取父级工作台（ProtoHub 主窗口）注册表或当前项目信息
       try {
         if (window.parent && window.parent !== window) {
           if (Array.isArray(window.parent.__PRD_PAGES_REGISTRY__) && window.parent.__PRD_PAGES_REGISTRY__.length > 0) {
-            pages = window.parent.__PRD_PAGES_REGISTRY__;
+            pages = window.parent.__PRD_PAGES_REGISTRY__.map(p => ({
+              id: p.id || (p.path ? p.path.replace(/\.[^/.]+$/, "") : "page"),
+              name: p.name || p.title || p.path,
+              path: p.path || p.fileName || p.relativePath,
+              visible: p.visible !== false
+            }));
             return;
           }
           if (Array.isArray(window.parent.app?.projectInfo?.pages) && window.parent.app.projectInfo.pages.length > 0) {
@@ -1004,13 +1004,19 @@
         }
       } catch (e) {}
 
-      // 3. 读取本地存储
+      // 2. 读取原型内嵌数据
+      if (Array.isArray(annotationData.pages) && annotationData.pages.length > 0) {
+        pages = annotationData.pages.map(p => ({ ...p, visible: p.visible !== false }));
+        return;
+      }
+
+      // 3. 读取本地统一存储
       try {
         const saved = localStorage.getItem(UNIFIED_STORAGE_KEY) || localStorage.getItem("PRD_HUB_PAGES_V2");
         if (saved) {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            pages = parsed;
+            pages = parsed.map(p => ({ ...p, visible: p.visible !== false }));
             return;
           }
         }
@@ -1022,24 +1028,35 @@
 
     const curFile = window.location.pathname.split("/").pop() || "index.html";
 
-    function renderTabs() {
-      loadPagesFromStorage();
+    function renderTabs(customPages) {
+      if (Array.isArray(customPages)) {
+        pages = customPages.map(p => ({ ...p, visible: p.visible !== false }));
+      } else {
+        loadPagesFromStorage();
+      }
       tabsWrap.innerHTML = "";
-      pages.filter(p => p.visible).forEach(p => {
+      // 严格仅展示勾选（visible !== false）的页面
+      const visiblePages = (pages || []).filter(p => p && p.visible !== false);
+      if (visiblePages.length <= 1) {
+        navBar.style.display = "none";
+        return;
+      }
+      navBar.style.display = "flex";
+      visiblePages.forEach(p => {
         const chip = document.createElement("a");
-        chip.className = `protoMobile-page-tab-chip ${curFile.toLowerCase() === (p.path || "").toLowerCase() ? "is-active" : ""}`;
+        const isActive = curFile.toLowerCase() === (p.path || "").toLowerCase() || (p.id && curFile.toLowerCase().includes(p.id.toLowerCase()));
+        chip.className = `protoMobile-page-tab-chip ${isActive ? "is-active" : ""}`;
         chip.href = p.path || "#";
-        chip.textContent = p.name;
+        chip.textContent = p.name || p.title || p.id;
         chip.onclick = (e) => {
+          e.preventDefault();
           if (window.parent && window.parent !== window && typeof window.parent.switchPage === "function") {
-            e.preventDefault();
             window.parent.switchPage(p.id || p.path);
           } else if (window.parent && window.parent.app && typeof window.parent.app.switchPage === "function") {
-            e.preventDefault();
             const target = window.parent.app.projectInfo?.pages?.find(item => item.id === p.id || item.path === p.path);
-            if (target) {
-              window.parent.app.switchPage(target);
-            }
+            if (target) window.parent.app.switchPage(target);
+          } else {
+            window.location.href = p.path;
           }
         };
         tabsWrap.appendChild(chip);
@@ -1051,7 +1068,7 @@
     // 监听父级工作台或其它窗口发来的实时同步通知
     window.addEventListener("message", (e) => {
       if (e.data && (e.data.type === "PRD_PAGES_UPDATED" || e.data.type === "SYNC_PAGES")) {
-        renderTabs();
+        renderTabs(e.data.pages);
       }
     });
     window.addEventListener("storage", (e) => {
@@ -1062,15 +1079,9 @@
 
     if (manageBtn) {
       manageBtn.onclick = () => {
-        if (window.parent && window.parent !== window) {
-          if (typeof window.parent.openModal === "function") {
-            window.parent.openModal();
-            return;
-          }
-          if (window.parent.app && typeof window.parent.app.openPagesModal === "function") {
-            window.parent.app.openPagesModal();
-            return;
-          }
+        if (window.parent && window.parent !== window && typeof window.parent.openModal === "function") {
+          window.parent.openModal();
+          return;
         }
 
         const modal = document.createElement("div");
