@@ -84,6 +84,11 @@
       </button>
 
       <!-- 导出交付物 -->
+            <!-- 物理保存当前页 -->
+      <button class="tool-btn" id="btn-save-current" title="原地保存并写回本地物理文件 (Ctrl+S)" style="background:#10b981; color:#ffffff; border-color:#059669; font-weight:600;">
+        <span class="material-icons" style="font-size:16px;">save</span>
+        <span>保存当前页</span>
+      </button>
       <button class="tool-btn primary" id="btn-export-single">
         <span class="material-icons" style="font-size:16px;">file_download</span>
         <span>导出单文件</span>
@@ -338,6 +343,8 @@
     </div>
   </div>
 
+  <script src="html-serializer.js?v=2.0.2"></script>
+  <script src="file-manager.js?v=2.0.2"></script>
   <script src="license.js?v=2.0.2"></script>
   <script src="engine-assets.js?v=2.0.2"></script>
   <script src="inspector.js?v=2.0.2"></script>

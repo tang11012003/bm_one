@@ -38,6 +38,7 @@ class WorkbenchApp {
       btnToggleInspect: document.getElementById('btn-toggle-inspect'),
       btnManagePages: document.getElementById('btn-manage-pages'),
       btnShareLan: document.getElementById('btn-share-lan'),
+      btnSaveCurrent: document.getElementById('btn-save-current'),
       btnExportSingle: document.getElementById('btn-export-single'),
       btnViewMobile: document.getElementById('btn-view-mobile'),
       btnViewPc: document.getElementById('btn-view-pc'),
@@ -281,6 +282,19 @@ class WorkbenchApp {
     this.dom.btnSubmitLicense.addEventListener('click', () => this.submitLicenseKey());
     this.dom.btnClearLicense.addEventListener('click', () => this.clearLicenseKey());
 
+        // 物理保存当前页
+    if (this.dom.btnSaveCurrent) {
+      this.dom.btnSaveCurrent.addEventListener('click', () => this.saveCurrentPage(true));
+    }
+
+    // 全局快捷键 Ctrl+S / Cmd+S 拦截保存
+    window.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        this.saveCurrentPage(true);
+      }
+    });
+
     // 导出单文件 HTML
     this.dom.btnExportSingle.addEventListener('click', () => this.exportSingleHtml());
 
@@ -301,7 +315,8 @@ class WorkbenchApp {
         this.currentAnnotations = this.activePage?.annotations || [];
         this.renderGlobalDocs();
         this.renderAnnotations();
-        alert('🎉 原型标注与需求说明已成功保存！');
+        await this.saveCurrentPage(false);
+        alert('🎉 原型标注与需求说明已成功保存并写回本地物理文件！');
       } else if (e.data.type === 'SYNC_SESSION_DRAFT') {
         const sess = e.data.session;
         if (sess && this.activePage) {
@@ -382,6 +397,7 @@ class WorkbenchApp {
   }
 
   async loadWebDirectoryHandle(dirHandle) {
+    this.dirHandle = dirHandle;
     const rawFiles = [];
     for await (const entry of dirHandle.values()) {
       if (entry.kind === 'file' && entry.name.endsWith('.html')) {
@@ -390,7 +406,8 @@ class WorkbenchApp {
         rawFiles.push({
           filename: entry.name,
           name: entry.name.replace(/\.html$/, ''),
-          htmlContent: text
+          htmlContent: text,
+          fileHandle: entry
         });
       }
     }
@@ -476,6 +493,7 @@ class WorkbenchApp {
         filename: f.filename,
         originalHtml: f.htmlContent,
         htmlContent: f.htmlContent,
+        fileHandle: f.fileHandle || null,
         isWrapperHub: isWrapperHub,
         annotations: annotations || [],
         globalSections: globalSections || [],
@@ -1054,6 +1072,89 @@ class WorkbenchApp {
 
     setShareTab('direct');
     this.dom.modalShare.classList.remove('hidden');
+  }
+
+  /**
+   * 物理保存当前页面（支持 File System Access API 原地写回本地磁盘）
+   */
+  async function saveCurrentPageHelper(workbench, notify = true) {
+    if (!workbench.activePage) return false;
+    const page = workbench.activePage;
+
+    // 1. 尝试从 iframe 获取最新实时渲染的 DOM
+    let liveHtml = '';
+    try {
+      const iframeDoc = workbench.dom.previewIframe?.contentDocument;
+      if (iframeDoc && typeof window !== 'undefined' && window.HtmlSerializer) {
+        liveHtml = window.HtmlSerializer.serializeDocument(iframeDoc);
+      }
+    } catch (e) {
+      console.warn('提取 iframe DOM 失败:', e);
+    }
+
+    if (!liveHtml) {
+      liveHtml = page.originalHtml || page.htmlContent || '';
+    }
+
+    // 2. 净化并注入最新标注数据
+    let finalHtml = liveHtml;
+    if (typeof window !== 'undefined' && window.HtmlSerializer) {
+      finalHtml = window.HtmlSerializer.cleanHtmlString(finalHtml);
+      finalHtml = window.HtmlSerializer.injectAnnotationData(finalHtml, {
+        annotations: page.annotations || [],
+        globalSections: page.globalSections || [],
+        globalDoc: page.globalDoc || {}
+      });
+    }
+
+    page.originalHtml = finalHtml;
+    page.htmlContent = finalHtml;
+
+    // 3. 执行物理保存
+    let saved = false;
+
+    // 途径 A: 如果拥有 FileSystemFileHandle，调用现代原生写回
+    if (page.fileHandle && typeof window !== 'undefined' && window.ProtoFileManager) {
+      saved = await window.ProtoFileManager.saveToFileHandle(page.fileHandle, finalHtml);
+    }
+
+    // 途径 B: 如果在 Electron 桌面环境下且有后端支持
+    if (!saved && window.electronAPI && workbench.apiBase) {
+      try {
+        const res = await fetch(`${workbench.apiBase}/api/page/save`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            path: page.path,
+            content: finalHtml
+          })
+        });
+        if (res.ok) saved = true;
+      } catch (err) {}
+    }
+
+    // 途径 C: 若以上均无，降级为另存为 / 下载
+    if (!saved && typeof window !== 'undefined' && window.ProtoFileManager) {
+      const res = await window.ProtoFileManager.saveFileAs(finalHtml, page.path || `${page.id}.html`);
+      if (res.handle) {
+        page.fileHandle = res.handle;
+      }
+      saved = res.success;
+    }
+
+    if (notify) {
+      if (saved) {
+        alert(`🎉 成功保存并物理写回本地文件：
+${page.name} (${page.path})`);
+      } else {
+        alert(`⚠️ 未能直接写回文件，已启动下载备份。`);
+      }
+    }
+    return saved;
+  }
+
+  async saveCurrentPage(notify = true) {
+    return await saveCurrentPageHelper(this, notify);
   }
 
   async exportSingleHtml() {

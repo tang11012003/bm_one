@@ -1,5 +1,5 @@
 /**
- * ProtoHub 单文件离线交付包导出器 (100% 独立自包含，无跨域及脚本截断问题)
+ * ProtoHub 单文件离线交付包导出器 (100% 独立自包含，无跨域及脚本截断问题，纯净 DOM 离线渲染)
  */
 class Exporter {
   constructor(apiBase) {
@@ -22,6 +22,35 @@ class Exporter {
     return null;
   }
 
+  /**
+   * 序列化与净化单个页面的 HTML 源码
+   */
+  sanitizePageHtml(rawHtml, pageData) {
+    let clean = rawHtml || '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body></body></html>';
+    
+    // 优先使用 Serializer 净化引擎
+    if (typeof window !== 'undefined' && window.HtmlSerializer) {
+      clean = window.HtmlSerializer.cleanHtmlString(clean);
+      if (pageData) {
+        clean = window.HtmlSerializer.injectAnnotationData(clean, pageData);
+      }
+    } else {
+      clean = clean
+        .replace(/<style\s+id=["']protoAnnotationEditorCss["'][^>]*>[\s\S]*?<\/style>/gi, '')
+        .replace(/<script\s+id=["']protoMockApiInterceptor["'][^>]*>[\s\S]*?<\/script>/gi, '')
+        .replace(/<script\s+id=["']protoAnnotationEditorJs["'][^>]*>[\s\S]*?<\/script>/gi, '')
+        .replace(/<style\s+id=["']protoReviewMarkerCss["'][^>]*>[\s\S]*?<\/style>/gi, '')
+        .replace(/<script\s+id=["']protoReviewMarkerScript["'][^>]*>[\s\S]*?<\/script>/gi, '')
+        .replace(/<style\s+id=["']protoAnnotationCss["'][^>]*>[\s\S]*?<\/style>/gi, '')
+        .replace(/<script\s+id=["']protoAnnotationRuntime["'][^>]*>[\s\S]*?<\/script>/gi, '')
+        .replace(/<div\s+id=["']protoMobileStage["'][^>]*>[\s\S]*?<\/div>\s*<div\s+id=["']prototypeAnnotationRoot["'][^>]*>[\s\S]*?<\/div>/gi, '')
+        .replace(/<div\s+id=["']protoWebReviewWorkspace["'][^>]*>[\s\S]*?<\/div>/gi, '')
+        .replace(/\s*data-proto-[a-zA-Z0-9_-]+(=["'][^"']*["'])?/gi, '')
+        .replace(/\s*data-hve-[a-zA-Z0-9_-]+(=["'][^"']*["'])?/gi, '');
+    }
+    return clean;
+  }
+
   async generateSingleHtmlBundle(selectedPages) {
     let pages = selectedPages;
     if (!pages || pages.length === 0) {
@@ -29,7 +58,6 @@ class Exporter {
       pages = info?.pages?.filter(p => p.visible !== false) || [];
     }
 
-    // 获取所有页面的 HTML 源码和标注数据
     const pageDataMap = {};
     for (const page of pages) {
       try {
@@ -51,11 +79,13 @@ class Exporter {
           } catch (fetchErr) {}
         }
 
+        const cleanHtml = this.sanitizePageHtml(htmlText, { annotations, globalSections, globalDoc });
+
         pageDataMap[page.id] = {
           id: page.id,
           name: page.name || page.id,
           path: page.path || `${page.id}.html`,
-          html: htmlText,
+          html: cleanHtml,
           annotations: annotations,
           globalSections: globalSections,
           globalDoc: globalDoc
@@ -65,7 +95,6 @@ class Exporter {
       }
     }
 
-    // 关键：对 JSON 进行防 HTML 解析截断安全转义
     const safeDataJson = JSON.stringify(pageDataMap)
       .replace(/<\/script/gi, '<\\/script')
       .replace(/<!--/g, '<\\!--');
@@ -135,7 +164,7 @@ class Exporter {
   .canvas { flex: 1; display: flex; align-items: center; justify-content: center; padding: 16px; overflow: hidden; background: var(--bg-page); }
   .frame-box { width: 100%; height: 100%; transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); border-radius: 8px; overflow: hidden; background: #ffffff; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
   .frame-box.mobile { width: 390px; height: 844px; border-radius: 44px; box-shadow: 0 0 0 12px #1e293b, 0 25px 50px -12px rgba(0,0,0,0.35); }
-  iframe { width: 100%; height: 100%; border: none; display: block; }
+  iframe { width: 100%; height: 100%; border: none; display: block; background: #fff; }
   .sidebar { width: 380px; background: #ffffff; border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0; }
   .sidebar-header { padding: 14px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
   .sidebar-title { font-size: 13.5px; font-weight: 700; color: #1e293b; display: flex; align-items: center; gap: 6px; }
@@ -191,83 +220,78 @@ ${safeDataJson}
   </script>
 
   <script>
-    let PAGE_DATA = {};
+    var PAGE_DATA = {};
     try {
-      const dataEl = document.getElementById('protoPageBundleData');
+      var dataEl = document.getElementById('protoPageBundleData');
       PAGE_DATA = JSON.parse(dataEl.textContent);
     } catch (e) {
       console.error('解析离线数据包异常:', e);
     }
 
-    let activePageId = Object.keys(PAGE_DATA)[0] || '';
+    var activePageId = Object.keys(PAGE_DATA)[0] || '';
 
     function renderTabs() {
-      const container = document.getElementById('tabContainer');
-      const entries = Object.entries(PAGE_DATA);
+      var container = document.getElementById('tabContainer');
+      var entries = Object.entries(PAGE_DATA);
       if (entries.length <= 1) {
         container.style.display = 'none';
         return;
       }
       container.style.display = 'flex';
-      container.innerHTML = entries.map(([id, p]) => \`
-        <div class="tab-chip \${id === activePageId ? 'active' : ''}" onclick="switchPage('\${id}')">
-          \${p.name || id}
-        </div>
-      \`).join('');
+      container.innerHTML = entries.map(function(item) {
+        var id = item[0];
+        var p = item[1];
+        var cls = id === activePageId ? 'tab-chip active' : 'tab-chip';
+        return '<div class="' + cls + '" onclick="switchPage(\\'' + id + '\\')">' + (p.name || id) + '</div>';
+      }).join('');
     }
 
     function switchPage(pageId) {
       activePageId = pageId;
       renderTabs();
-      const page = PAGE_DATA[pageId];
+      var page = PAGE_DATA[pageId];
       if (!page) return;
 
-      const iframe = document.getElementById('protoIframe');
-      iframe.srcdoc = page.html || '<div style="padding:20px;">页面内容为空</div>';
+      var iframe = document.getElementById('protoIframe');
+      iframe.srcdoc = page.html || '<div style="padding:20px; font-family:sans-serif;">页面内容为空</div>';
 
-      const sidebarContent = document.getElementById('sidebarContent');
-      const annoBadge = document.getElementById('annoBadge');
+      var sidebarContent = document.getElementById('sidebarContent');
+      var annoBadge = document.getElementById('annoBadge');
       
-      let html = '';
+      var html = '';
 
-      // 1. 渲染全局业务文档
-      const docs = page.globalSections || [];
+      var docs = page.globalSections || [];
       if (docs.length > 0) {
         html += '<div style="font-size:12px; font-weight:700; color:#94a3b8; margin-bottom:4px; text-transform:uppercase;">📖 全局业务需求</div>';
-        docs.forEach((d, i) => {
-          html += \`
-            <div class="doc-box">
-              <div class="doc-title">
-                <span style="width:6px; height:6px; border-radius:50%; background:#2563eb; display:inline-block;"></span>
-                <span>\${d.title || ('章节 ' + (i + 1))}</span>
-              </div>
-              <div class="doc-content">\${d.content || '暂无描述'}</div>
-            </div>
-          \`;
+        docs.forEach(function(d, i) {
+          html += '<div class="doc-box">' +
+            '<div class="doc-title">' +
+            '<span style="width:6px; height:6px; border-radius:50%; background:#2563eb; display:inline-block;"></span>' +
+            '<span>' + (d.title || ('章节 ' + (i + 1))) + '</span>' +
+            '</div>' +
+            '<div class="doc-content">' + (d.content || '暂无描述') + '</div>' +
+            '</div>';
         });
         html += '<div style="height:1px; background:#e2e8f0; margin:8px 0 12px 0;"></div>';
       }
 
-      // 2. 渲染元素打点标注
-      const annos = page.annotations || [];
+      var annos = page.annotations || [];
       annoBadge.textContent = annos.length + ' 条';
 
       if (annos.length > 0) {
         html += '<div style="font-size:12px; font-weight:700; color:#94a3b8; margin-bottom:4px; text-transform:uppercase;">🎯 界面打点需求变更</div>';
-        annos.forEach((a, i) => {
-          const typeClass = a.type || 'modify';
-          const typeName = a.typeLabel || (a.type === 'add' ? '新增功能' : (a.type === 'rule' ? '业务规则' : (a.type === 'delete' ? '删除功能' : '修改逻辑')));
-          html += \`
-            <div class="card">
-              <div class="card-top">
-                <span class="tag \${typeClass}">\${typeName}</span>
-                <span style="font-size:11px; font-weight:700; color:#94a3b8;">#\${i + 1}</span>
-              </div>
-              <div class="card-title">\${a.title || a.name || '需求项'}</div>
-              <div class="card-desc">\${a.desc || a.summary || a.content || '暂无详细描述'}</div>
-              \${a.sdd?.blockId ? \`<div class="card-sdd">🔗 SDD: \${a.sdd.blockId}</div>\` : ''}
-            </div>
-          \`;
+        annos.forEach(function(a, i) {
+          var typeClass = a.type || 'modify';
+          var typeName = a.typeLabel || (a.type === 'add' ? '新增功能' : (a.type === 'rule' ? '业务规则' : (a.type === 'delete' ? '删除功能' : '修改逻辑')));
+          html += '<div class="card">' +
+            '<div class="card-top">' +
+            '<span class="tag ' + typeClass + '">' + typeName + '</span>' +
+            '<span style="font-size:11px; font-weight:700; color:#94a3b8;">#' + (i + 1) + '</span>' +
+            '</div>' +
+            '<div class="card-title">' + (a.title || a.name || '需求项') + '</div>' +
+            '<div class="card-desc">' + (a.desc || a.summary || a.content || '暂无详细描述') + '</div>' +
+            (a.sdd && a.sdd.blockId ? '<div class="card-sdd">🔗 SDD: ' + a.sdd.blockId + '</div>' : '') +
+            '</div>';
         });
       } else if (docs.length === 0) {
         html = '<div style="color:#94a3b8; font-size:13px; text-align:center; padding:40px 0;">当前页面暂无需求变更批注</div>';
@@ -277,13 +301,13 @@ ${safeDataJson}
     }
 
     function setViewMode(mode) {
-      const box = document.getElementById('frameBox');
+      var box = document.getElementById('frameBox');
       document.getElementById('btnMobile').className = 'view-btn ' + (mode === 'mobile' ? 'active' : '');
       document.getElementById('btnPc').className = 'view-btn ' + (mode === 'pc' ? 'active' : '');
       box.className = 'frame-box ' + (mode === 'mobile' ? 'mobile' : 'pc');
     }
 
-    window.addEventListener('DOMContentLoaded', () => {
+    window.addEventListener('DOMContentLoaded', function() {
       renderTabs();
       if (activePageId) switchPage(activePageId);
     });
