@@ -1074,54 +1074,74 @@ class WorkbenchApp {
     this.dom.modalShare.classList.remove('hidden');
   }
 
-  /**
-   * 物理保存当前页面（支持 File System Access API 原地写回本地磁盘）
+    /**
+   * 从当前 iframe 中安全同步提取最新真实 DOM 与标注数据
    */
-  async function saveCurrentPageHelper(workbench, notify = true) {
-    if (!workbench.activePage) return false;
-    const page = workbench.activePage;
-
-    // 1. 尝试从 iframe 获取最新实时渲染的 DOM
-    let liveHtml = '';
+  syncCurrentPageLiveDom() {
+    if (!this.activePage) return;
     try {
-      const iframeDoc = workbench.dom.previewIframe?.contentDocument;
+      const iframeDoc = this.dom.previewIframe?.contentDocument;
       if (iframeDoc && typeof window !== 'undefined' && window.HtmlSerializer) {
-        liveHtml = window.HtmlSerializer.serializeDocument(iframeDoc);
+        const liveHtml = window.HtmlSerializer.serializeDocument(iframeDoc);
+        if (liveHtml && liveHtml.length > 50) {
+          const cleaned = window.HtmlSerializer.cleanHtmlString(liveHtml);
+          const finalHtml = window.HtmlSerializer.injectAnnotationData(cleaned, {
+            annotations: this.activePage.annotations || this.currentAnnotations || [],
+            globalSections: this.activePage.globalSections || [],
+            globalDoc: this.activePage.globalDoc || {}
+          });
+          this.activePage.htmlContent = finalHtml;
+          this.activePage.originalHtml = finalHtml;
+        }
       }
     } catch (e) {
       console.warn('提取 iframe DOM 失败:', e);
     }
+  }
 
-    if (!liveHtml) {
-      liveHtml = page.originalHtml || page.htmlContent || '';
-    }
+  /**
+   * 物理保存当前页面（支持弹出系统保存位置选择框或原地写回）
+   */
+  async saveCurrentPage(notify = true, forcePicker = false) {
+    if (!this.activePage) return false;
+    this.syncCurrentPageLiveDom();
+    const page = this.activePage;
 
-    // 2. 净化并注入最新标注数据
-    let finalHtml = liveHtml;
+    let finalHtml = page.htmlContent || page.originalHtml || '';
     if (typeof window !== 'undefined' && window.HtmlSerializer) {
       finalHtml = window.HtmlSerializer.cleanHtmlString(finalHtml);
       finalHtml = window.HtmlSerializer.injectAnnotationData(finalHtml, {
-        annotations: page.annotations || [],
+        annotations: page.annotations || this.currentAnnotations || [],
         globalSections: page.globalSections || [],
         globalDoc: page.globalDoc || {}
       });
+      page.htmlContent = finalHtml;
+      page.originalHtml = finalHtml;
     }
 
-    page.originalHtml = finalHtml;
-    page.htmlContent = finalHtml;
-
-    // 3. 执行物理保存
     let saved = false;
+    let chosenName = page.path || `${page.name}.html`;
 
-    // 途径 A: 如果拥有 FileSystemFileHandle，调用现代原生写回
-    if (page.fileHandle && typeof window !== 'undefined' && window.ProtoFileManager) {
+    // 途径 A: 如果用户要求选定保存位置，或者没有原有句柄，弹出系统另存为选择框
+    if (forcePicker || !page.fileHandle) {
+      if (typeof window !== 'undefined' && window.ProtoFileManager) {
+        const res = await window.ProtoFileManager.saveFileAsWithPicker(finalHtml, chosenName, 'HTML 页面文件');
+        if (res.aborted) return false;
+        if (res.handle) {
+          page.fileHandle = res.handle;
+        }
+        chosenName = res.chosenName || chosenName;
+        saved = res.success;
+      }
+    } else if (page.fileHandle && typeof window !== 'undefined' && window.ProtoFileManager) {
+      // 途径 B: 原地直接写回
       saved = await window.ProtoFileManager.saveToFileHandle(page.fileHandle, finalHtml);
     }
 
-    // 途径 B: 如果在 Electron 桌面环境下且有后端支持
-    if (!saved && window.electronAPI && workbench.apiBase) {
+    // 途径 C: Electron 桌面模式后端写回
+    if (!saved && window.electronAPI && this.apiBase) {
       try {
-        const res = await fetch(`${workbench.apiBase}/api/page/save`, {
+        const res = await fetch(`${this.apiBase}/api/page/save`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1133,42 +1153,65 @@ class WorkbenchApp {
       } catch (err) {}
     }
 
-    // 途径 C: 若以上均无，降级为另存为 / 下载
-    if (!saved && typeof window !== 'undefined' && window.ProtoFileManager) {
-      const res = await window.ProtoFileManager.saveFileAs(finalHtml, page.path || `${page.id}.html`);
-      if (res.handle) {
-        page.fileHandle = res.handle;
-      }
-      saved = res.success;
-    }
-
     if (notify) {
       if (saved) {
-        alert(`🎉 成功保存并物理写回本地文件：
-${page.name} (${page.path})`);
+        alert(`🎉 成功保存并物理写回文件：
+${chosenName}`);
       } else {
-        alert(`⚠️ 未能直接写回文件，已启动下载备份。`);
+        alert(`⚠️ 未能完成文件写入。`);
       }
     }
     return saved;
   }
 
-  async saveCurrentPage(notify = true) {
-    return await saveCurrentPageHelper(this, notify);
-  }
-
+  /**
+   * 导出独立自包含的离线单文件交付物（支持自由选择保存位置）
+   */
   async exportSingleHtml() {
     if (!this.checkLicenseGuard('单文件交付导出')) return;
-    if (!this.projectInfo) return;
-    const bundleHtml = await this.exporter.generateSingleHtmlBundle(this.projectInfo.pages);
-    
-    const filename = `${this.dom.folderName.textContent || 'ProtoHub'}_交付原型.html`;
+    if (!this.projectInfo || !this.projectInfo.pages || this.projectInfo.pages.length === 0) {
+      alert('当前项目无可用页面，请先打开原型文件夹。');
+      return;
+    }
+
+    // 1. 同步当前活跃页面的最新修改
+    this.syncCurrentPageLiveDom();
+
+    // 2. 确保所有页面都有完整的 HTML 源码
+    const pagesToExport = this.projectInfo.pages.filter(p => p.visible !== false);
+    for (const p of pagesToExport) {
+      if (!p.htmlContent && p.originalHtml) {
+        p.htmlContent = p.originalHtml;
+      }
+    }
+
+    // 3. 生成自包含纯净 Bundle
+    const bundleHtml = await this.exporter.generateSingleHtmlBundle(pagesToExport);
+    const folderTitle = (this.dom.folderName?.textContent || 'ProtoHub').replace(/[\/:*?"<>|]/g, '_');
+    const defaultFilename = `${folderTitle}_交付原型.html`;
+
+    // 4. 弹出系统保存位置选择器（支持用户自由选定目录与名称）
+    if (typeof window !== 'undefined' && window.ProtoFileManager) {
+      const res = await window.ProtoFileManager.saveFileAsWithPicker(bundleHtml, defaultFilename, 'ProtoHub 独立交付原型 (.html)');
+      if (res.aborted) {
+        console.log('用户取消了保存');
+        return;
+      }
+      if (res.success) {
+        setTimeout(() => alert(`🎉 独立交付原型已成功保存！
+文件名：${res.chosenName || defaultFilename}
+研发和业务双击即可直接离线查看。`), 200);
+        return;
+      }
+    }
+
+    // 降级下载
     const blob = new Blob([bundleHtml], { type: 'text/html;charset=utf-8' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = filename;
+    a.download = defaultFilename;
     a.click();
-    setTimeout(() => alert('🎉 独立单文件 HTML 导出成功！研发和业务双击即可直接离线查看。'), 200);
+    setTimeout(() => alert('🎉 独立单文件 HTML 导出成功！'), 200);
   }
 
   async openGithubModal() {

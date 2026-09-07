@@ -26,7 +26,10 @@ class Exporter {
    * 序列化与净化单个页面的 HTML 源码
    */
   sanitizePageHtml(rawHtml, pageData) {
-    let clean = rawHtml || '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body></body></html>';
+    let clean = rawHtml || '';
+    if (!clean.trim()) {
+      clean = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>原型页面</title></head><body><div style="padding:24px; font-family:sans-serif;"><h2>暂无页面源码</h2></div></body></html>';
+    }
     
     // 优先使用 Serializer 净化引擎
     if (typeof window !== 'undefined' && window.HtmlSerializer) {
@@ -44,9 +47,13 @@ class Exporter {
         .replace(/<style\s+id=["']protoAnnotationCss["'][^>]*>[\s\S]*?<\/style>/gi, '')
         .replace(/<script\s+id=["']protoAnnotationRuntime["'][^>]*>[\s\S]*?<\/script>/gi, '')
         .replace(/<div\s+id=["']protoMobileStage["'][^>]*>[\s\S]*?<\/div>\s*<div\s+id=["']prototypeAnnotationRoot["'][^>]*>[\s\S]*?<\/div>/gi, '')
+        .replace(/<div\s+id=["']prototypeAnnotationRoot["'][^>]*>[\s\S]*?<\/div>/gi, '')
         .replace(/<div\s+id=["']protoWebReviewWorkspace["'][^>]*>[\s\S]*?<\/div>/gi, '')
+        .replace(/<div[^>]*class=["'][^"']*proto-app-wrapper[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi, '$1')
         .replace(/\s*data-proto-[a-zA-Z0-9_-]+(=["'][^"']*["'])?/gi, '')
-        .replace(/\s*data-hve-[a-zA-Z0-9_-]+(=["'][^"']*["'])?/gi, '');
+        .replace(/\s*data-hve-[a-zA-Z0-9_-]+(=["'][^"']*["'])?/gi, '')
+        .replace(/\bproto-editor-edit-mode\b/g, '')
+        .replace(/\bprotoMobile-ready\b/g, '');
     }
     return clean;
   }
@@ -59,14 +66,16 @@ class Exporter {
     }
 
     const pageDataMap = {};
-    for (const page of pages) {
+    for (let i = 0; i < pages.length; i++) {
+      const page = pages[i];
       try {
-        let htmlText = page.originalHtml || page.htmlContent || '';
+        let htmlText = page.htmlContent || page.originalHtml || '';
         let annotations = page.annotations || [];
         let globalSections = page.globalSections || [];
         let globalDoc = page.globalDoc || {};
 
-        if (!htmlText && this.apiBase) {
+        // 如果在 Web 环境中且未预先读取到 HTML，尝试 fetch（桌面后端模式下）
+        if (!htmlText && this.apiBase && !window.__IS_STATIC_WEB__) {
           try {
             const htmlRes = await fetch(`${this.apiBase}/${page.path}`);
             if (htmlRes.ok) htmlText = await htmlRes.text();
@@ -80,11 +89,12 @@ class Exporter {
         }
 
         const cleanHtml = this.sanitizePageHtml(htmlText, { annotations, globalSections, globalDoc });
+        const safePageId = page.id || `page_${i + 1}`;
 
-        pageDataMap[page.id] = {
-          id: page.id,
-          name: page.name || page.id,
-          path: page.path || `${page.id}.html`,
+        pageDataMap[safePageId] = {
+          id: safePageId,
+          name: page.name || safePageId,
+          path: page.path || `${safePageId}.html`,
           html: cleanHtml,
           annotations: annotations,
           globalSections: globalSections,
@@ -234,7 +244,10 @@ ${safeDataJson}
       var container = document.getElementById('tabContainer');
       var entries = Object.entries(PAGE_DATA);
       if (entries.length <= 1) {
-        container.style.display = 'none';
+        container.innerHTML = entries.map(function(item) {
+          return '<div class="tab-chip active">' + (item[1].name || item[0]) + '</div>';
+        }).join('');
+        container.style.display = 'flex';
         return;
       }
       container.style.display = 'flex';
@@ -307,10 +320,16 @@ ${safeDataJson}
       box.className = 'frame-box ' + (mode === 'mobile' ? 'mobile' : 'pc');
     }
 
-    window.addEventListener('DOMContentLoaded', function() {
+    function init() {
       renderTabs();
       if (activePageId) switchPage(activePageId);
-    });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
   </script>
 </body>
 </html>`;
