@@ -1,124 +1,85 @@
 /**
- * html-serializer.js — PRD 工作台 DOM 序列化与净化引擎
- * 功能：将编辑/运行时的 DOM 或 HTML 源码净化为干净、标准、无污染的独立 HTML，同时支持无损注入标注元数据。
+ * html-serializer.js — PRD 工作台纯净 DOM 序列化与数据注入引擎
+ * 完全遵循 html-visual-editor-main 原则：仅清除编辑器/审阅器自身注入的私有标签与脚本，绝对不破坏或删除用户的任何原型 DOM 与样式。
  */
 (function (global) {
   'use strict';
 
-  function cleanDocumentNode(docClone) {
-    if (!docClone) return;
+  /**
+   * 清除 DOM 树上由工作台注入的临时辅助标记与脚本
+   */
+  function cleanNode(node) {
+    if (!node) return node;
 
-    // 1. 移除所有工作台与编辑器注入的 UI / 辅助 DOM 元素
+    // 1. 移除编辑器自身创建的独立 UI 浮层
     const editorSelectors = [
       '[data-hve-editor]',
-      '[data-proto-editor]',
-      '#prototypeAnnotationRoot',
-      '#protoMobileStage',
-      '#protoWebReviewWorkspace',
-      '#protoAnnotationGuideLines',
-      '#protoSelectionOverlay',
       '.proto-editor-toolbar',
-      '.proto-pin-marker',
-      '.hve-editor-element'
+      '.proto-review-pin',
+      '#protoSelectionOverlay',
+      '#protoAnnotationGuideLines'
     ];
     editorSelectors.forEach(sel => {
       try {
-        const els = docClone.querySelectorAll(sel);
+        const els = node.querySelectorAll(sel);
         els.forEach(el => el.remove());
       } catch (e) {}
     });
 
-    // 2. 移除所有注入的临时 style 与 script
-    const injectedScriptsAndStyles = [
+    // 2. 移除注入的辅助样式与脚本
+    const injectedStylesAndScripts = [
       'style[data-hve-injected]',
-      'style[data-proto-injected]',
-      'style#protoAnnotationEditorCss',
       'style#protoReviewMarkerCss',
-      'style#protoAnnotationCss',
-      'style#protoMobileAnnotationCss',
-      'script#protoMockApiInterceptor',
-      'script#protoAnnotationEditorJs',
+      'style#protoAnnotationEditorCss',
       'script#protoReviewMarkerScript',
-      'script#protoAnnotationRuntime',
-      'script#protoMobileMobileAnnotationRuntime',
-      'script[id^="protoAnnotation"]'
+      'script#protoAnnotationEditorJs',
+      'script#protoMockApiInterceptor'
     ];
-    injectedScriptsAndStyles.forEach(sel => {
+    injectedStylesAndScripts.forEach(sel => {
       try {
-        const els = docClone.querySelectorAll(sel);
+        const els = node.querySelectorAll(sel);
         els.forEach(el => el.remove());
       } catch (e) {}
     });
 
-    // 3. 递归清洗所有元素的编辑属性与临时 class
-    const allElements = docClone.querySelectorAll('*');
+    // 3. 移除临时添加的编辑属性
+    const allElements = node.querySelectorAll('*');
     allElements.forEach(el => {
-      // 检查并移除 contenteditable（仅移除编辑态临时加上的）
       if (el.hasAttribute('data-hve-contenteditable') || el.hasAttribute('data-proto-editable')) {
         el.removeAttribute('contenteditable');
       }
-
-      // 移除所有 data-hve-* 和 data-proto-* 属性
       const attrs = Array.from(el.attributes || []);
       attrs.forEach(attr => {
-        if (
-          attr.name.startsWith('data-hve-') ||
-          attr.name.startsWith('data-proto-') ||
-          attr.name === 'data-proto-app' ||
-          attr.name === 'data-proto-platform'
-        ) {
+        if (attr.name.startsWith('data-hve-')) {
           el.removeAttribute(attr.name);
         }
       });
-
-      // 移除编辑态注入的 class
       if (el.classList) {
-        el.classList.remove('proto-editor-edit-mode', 'protoMobile-ready', 'hve-selected', 'hve-hovered');
+        el.classList.remove('proto-editor-edit-mode', 'hve-selected', 'hve-hovered');
         if (el.classList.length === 0 && el.getAttribute('class') === '') {
           el.removeAttribute('class');
         }
       }
     });
 
-    // 4. 解包外层 wrapper（如果存在）
-    const wrappers = docClone.querySelectorAll('div[class*="proto-app-wrapper"]');
-    wrappers.forEach(wrap => {
-      const parent = wrap.parentNode;
-      if (parent) {
-        while (wrap.firstChild) {
-          parent.insertBefore(wrap.firstChild, wrap);
-        }
-        wrap.remove();
-      }
-    });
-
-    return docClone;
+    return node;
   }
 
   /**
-   * 序列化 DOM Document 为纯净标准 HTML 字符串
+   * 序列化 DOM Document 为干净的 HTML 字符串
    */
   function serializeDocument(targetDoc) {
     if (!targetDoc || !targetDoc.documentElement) return '';
     const docClone = targetDoc.documentElement.cloneNode(true);
-    cleanDocumentNode(docClone);
+    cleanNode(docClone);
     return '<!DOCTYPE html>\n' + docClone.outerHTML;
   }
 
   /**
-   * 净化已有的 HTML 字符串，移除所有注入代码
+   * 净化已有 HTML 字符串（仅剔除注入的 script/style，保留全部页面内容）
    */
   function cleanHtmlString(htmlStr) {
     if (!htmlStr || typeof htmlStr !== 'string') return '';
-    if (typeof DOMParser !== 'undefined') {
-      try {
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(htmlStr, 'text/html');
-        return serializeDocument(doc);
-      } catch (e) {}
-    }
-    
-    // 降级正则清洗
     return htmlStr
       .replace(/<style\s+id=["']protoAnnotationEditorCss["'][^>]*>[\s\S]*?<\/style>/gi, '')
       .replace(/<script\s+id=["']protoMockApiInterceptor["'][^>]*>[\s\S]*?<\/script>/gi, '')
@@ -127,53 +88,54 @@
       .replace(/<script\s+id=["']protoReviewMarkerScript["'][^>]*>[\s\S]*?<\/script>/gi, '')
       .replace(/<style\s+id=["']protoAnnotationCss["'][^>]*>[\s\S]*?<\/style>/gi, '')
       .replace(/<script\s+id=["']protoAnnotationRuntime["'][^>]*>[\s\S]*?<\/script>/gi, '')
-      .replace(/<div\s+id=["']protoMobileStage["'][^>]*>[\s\S]*?<\/div>\s*<div\s+id=["']prototypeAnnotationRoot["'][^>]*>[\s\S]*?<\/div>/gi, '')
-      .replace(/<div\s+id=["']prototypeAnnotationRoot["'][^>]*>[\s\S]*?<\/div>/gi, '')
-      .replace(/<div\s+id=["']protoWebReviewWorkspace["'][^>]*>[\s\S]*?<\/div>/gi, '')
-      .replace(/<div[^>]*class=["'][^"']*proto-app-wrapper[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi, '$1')
-      .replace(/\s*data-proto-[a-zA-Z0-9_-]+(=["'][^"']*["'])?/gi, '')
+      .replace(/\s*data-proto-editable(=["'][^"']*["'])?/gi, '')
       .replace(/\s*data-hve-[a-zA-Z0-9_-]+(=["'][^"']*["'])?/gi, '')
-      .replace(/\bproto-editor-edit-mode\b/g, '')
-      .replace(/\bprotoMobile-ready\b/g, '');
+      .replace(/\bproto-editor-edit-mode\b/g, '');
   }
 
   /**
-   * 将标注数据 (annotations, globalSections, globalDoc) 无损注入/更新到 HTML 字符串中
+   * 将标注数据 (annotations, globalSections, globalDoc) 无损注入/更新到原始 HTML 中
    */
   function injectAnnotationData(htmlStr, data) {
-    if (!htmlStr) htmlStr = '<!DOCTYPE html>\n<html><head><meta charset="utf-8"></head><body></body></html>';
+    if (!htmlStr || !htmlStr.trim()) {
+      htmlStr = '<!DOCTYPE html>\n<html><head><meta charset="utf-8"><title>原型页面</title></head><body></body></html>';
+    }
     
-    // 准备纯净数据结构
+    let clean = cleanHtmlString(htmlStr);
+
     const cleanData = {
-      version: '2.0.0',
+      prototypeId: data.prototypeId || 'page',
+      version: 2,
       updatedAt: new Date().toISOString(),
       globalDoc: data.globalDoc || {},
       globalSections: Array.isArray(data.globalSections) ? data.globalSections : [],
       annotations: Array.isArray(data.annotations) ? data.annotations : [],
-      mobile: data.mobile || null
+      mobile: data.mobile || { appRoot: "[data-proto-app]", deviceWidth: 390 }
     };
 
     const safeJson = JSON.stringify(cleanData, null, 2)
       .replace(/<\/script/gi, '<\\/script')
       .replace(/<!--/g, '<\\!--');
 
-    const dataScriptTag = `\n  <script id="prototypeAnnotationData" type="application/json">\n${safeJson}\n  </script>`;
+    const scriptTag = `\n<script id="prototypeAnnotationData" type="application/json">\n${safeJson}\n</script>`;
 
-    if (/<script\s+id=["']prototypeAnnotationData["'][^>]*>[\s\S]*?<\/script>/i.test(htmlStr)) {
-      return htmlStr.replace(/<script\s+id=["']prototypeAnnotationData["'][^>]*>[\s\S]*?<\/script>/i, dataScriptTag.trim());
+    // 如果原 HTML 中已存在 prototypeAnnotationData 标签，直接无损替换
+    if (/<script\s+id=["']prototypeAnnotationData["'][^>]*>[\s\S]*?<\/script>/i.test(clean)) {
+      return clean.replace(/<script\s+id=["']prototypeAnnotationData["'][^>]*>[\s\S]*?<\/script>/i, () => scriptTag.trim());
     }
 
-    if (/<\/head>/i.test(htmlStr)) {
-      return htmlStr.replace(/<\/head>/i, `${dataScriptTag}\n</head>`);
-    } else if (/<\/body>/i.test(htmlStr)) {
-      return htmlStr.replace(/<\/body>/i, `${dataScriptTag}\n</body>`);
+    // 优先注入在 </body> 之前，次选 </head> 之前，末尾兜底
+    if (/<\/body>/i.test(clean)) {
+      return clean.replace(/<\/body>/i, () => `${scriptTag}\n</body>`);
+    } else if (/<\/head>/i.test(clean)) {
+      return clean.replace(/<\/head>/i, () => `${scriptTag}\n</head>`);
     } else {
-      return htmlStr + dataScriptTag;
+      return clean + scriptTag;
     }
   }
 
   const Serializer = {
-    cleanDocumentNode,
+    cleanNode,
     serializeDocument,
     cleanHtmlString,
     injectAnnotationData

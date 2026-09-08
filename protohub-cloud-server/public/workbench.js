@@ -1074,58 +1074,60 @@ class WorkbenchApp {
     this.dom.modalShare.classList.remove('hidden');
   }
 
-    /**
-   * 从当前 iframe 中安全同步提取最新真实 DOM 与标注数据
+      /**
+   * 获取当前页面的完整原生源码并注入最新标注数据
    */
-  syncCurrentPageLiveDom() {
-    if (!this.activePage) return;
-    try {
-      const iframeDoc = this.dom.previewIframe?.contentDocument;
-      if (iframeDoc && typeof window !== 'undefined' && window.HtmlSerializer) {
-        const liveHtml = window.HtmlSerializer.serializeDocument(iframeDoc);
-        if (liveHtml && liveHtml.length > 50) {
-          const cleaned = window.HtmlSerializer.cleanHtmlString(liveHtml);
-          const finalHtml = window.HtmlSerializer.injectAnnotationData(cleaned, {
-            annotations: this.activePage.annotations || this.currentAnnotations || [],
-            globalSections: this.activePage.globalSections || [],
-            globalDoc: this.activePage.globalDoc || {}
-          });
-          this.activePage.htmlContent = finalHtml;
-          this.activePage.originalHtml = finalHtml;
+  getPreparedCurrentPageHtml() {
+    if (!this.activePage) return '';
+    let baseHtml = this.activePage.originalHtml || this.activePage.htmlContent || '';
+    
+    // 如果内存中为空，尝试从 iframe 中安全提取
+    if (!baseHtml.trim()) {
+      try {
+        const iframeDoc = this.dom.previewIframe?.contentDocument;
+        if (iframeDoc && typeof window !== 'undefined' && window.HtmlSerializer) {
+          baseHtml = window.HtmlSerializer.serializeDocument(iframeDoc);
         }
-      }
-    } catch (e) {
-      console.warn('提取 iframe DOM 失败:', e);
+      } catch (e) {}
     }
+
+    if (typeof window !== 'undefined' && window.HtmlSerializer) {
+      const finalHtml = window.HtmlSerializer.injectAnnotationData(baseHtml, {
+        prototypeId: this.activePage.id || 'page',
+        annotations: this.activePage.annotations || this.currentAnnotations || [],
+        globalSections: this.activePage.globalSections || [],
+        globalDoc: this.activePage.globalDoc || {}
+      });
+      this.activePage.originalHtml = finalHtml;
+      this.activePage.htmlContent = finalHtml;
+      return finalHtml;
+    }
+    return baseHtml;
   }
 
   /**
-   * 物理保存当前页面（支持弹出系统保存位置选择框或原地写回）
+   * 物理保存当前页面（支持 File System Access API 原地写回或弹出另存为）
    */
   async saveCurrentPage(notify = true, forcePicker = false) {
-    if (!this.activePage) return false;
-    this.syncCurrentPageLiveDom();
-    const page = this.activePage;
-
-    let finalHtml = page.htmlContent || page.originalHtml || '';
-    if (typeof window !== 'undefined' && window.HtmlSerializer) {
-      finalHtml = window.HtmlSerializer.cleanHtmlString(finalHtml);
-      finalHtml = window.HtmlSerializer.injectAnnotationData(finalHtml, {
-        annotations: page.annotations || this.currentAnnotations || [],
-        globalSections: page.globalSections || [],
-        globalDoc: page.globalDoc || {}
-      });
-      page.htmlContent = finalHtml;
-      page.originalHtml = finalHtml;
+    if (!this.activePage) {
+      alert('请先选择或打开一个原型页面。');
+      return false;
     }
 
-    let saved = false;
-    let chosenName = page.path || `${page.name}.html`;
+    const finalHtml = this.getPreparedCurrentPageHtml();
+    if (!finalHtml || finalHtml.length < 20) {
+      alert('⚠️ 页面源码为空，无法执行保存。');
+      return false;
+    }
 
-    // 途径 A: 如果用户要求选定保存位置，或者没有原有句柄，弹出系统另存为选择框
+    const page = this.activePage;
+    let saved = false;
+    let chosenName = page.path || `${page.name || 'page'}.html`;
+
+    // 途径 A: 如果用户要求选择位置，或者没有原有文件句柄，弹出系统另存为选择框
     if (forcePicker || !page.fileHandle) {
       if (typeof window !== 'undefined' && window.ProtoFileManager) {
-        const res = await window.ProtoFileManager.saveFileAsWithPicker(finalHtml, chosenName, 'HTML 页面文件');
+        const res = await window.ProtoFileManager.saveFileAsWithPicker(finalHtml, chosenName, 'HTML 原型文件 (.html)');
         if (res.aborted) return false;
         if (res.handle) {
           page.fileHandle = res.handle;
@@ -1134,7 +1136,7 @@ class WorkbenchApp {
         saved = res.success;
       }
     } else if (page.fileHandle && typeof window !== 'undefined' && window.ProtoFileManager) {
-      // 途径 B: 原地直接写回
+      // 途径 B: 原地物理覆写本地文件 (真正保存)
       saved = await window.ProtoFileManager.saveToFileHandle(page.fileHandle, finalHtml);
     }
 
@@ -1174,29 +1176,34 @@ ${chosenName}`);
       return;
     }
 
-    // 1. 同步当前活跃页面的最新修改
-    this.syncCurrentPageLiveDom();
+    // 1. 同步当前活跃页面的最新标注与源码
+    this.getPreparedCurrentPageHtml();
 
-    // 2. 确保所有页面都有完整的 HTML 源码
+    // 2. 循环处理所有页面，确保源码完备
     const pagesToExport = this.projectInfo.pages.filter(p => p.visible !== false);
     for (const p of pagesToExport) {
       if (!p.htmlContent && p.originalHtml) {
         p.htmlContent = p.originalHtml;
       }
+      if (typeof window !== 'undefined' && window.HtmlSerializer) {
+        p.htmlContent = window.HtmlSerializer.injectAnnotationData(p.htmlContent || p.originalHtml || '', {
+          prototypeId: p.id || 'page',
+          annotations: p.annotations || [],
+          globalSections: p.globalSections || [],
+          globalDoc: p.globalDoc || {}
+        });
+      }
     }
 
-    // 3. 生成自包含纯净 Bundle
+    // 3. 生成自包含离线交付包
     const bundleHtml = await this.exporter.generateSingleHtmlBundle(pagesToExport);
     const folderTitle = (this.dom.folderName?.textContent || 'ProtoHub').replace(/[\/:*?"<>|]/g, '_');
     const defaultFilename = `${folderTitle}_交付原型.html`;
 
-    // 4. 弹出系统保存位置选择器（支持用户自由选定目录与名称）
+    // 4. 弹出系统保存位置选择器
     if (typeof window !== 'undefined' && window.ProtoFileManager) {
       const res = await window.ProtoFileManager.saveFileAsWithPicker(bundleHtml, defaultFilename, 'ProtoHub 独立交付原型 (.html)');
-      if (res.aborted) {
-        console.log('用户取消了保存');
-        return;
-      }
+      if (res.aborted) return;
       if (res.success) {
         setTimeout(() => alert(`🎉 独立交付原型已成功保存！
 文件名：${res.chosenName || defaultFilename}
@@ -1205,7 +1212,7 @@ ${chosenName}`);
       }
     }
 
-    // 降级下载
+    // 降级直接下载
     const blob = new Blob([bundleHtml], { type: 'text/html;charset=utf-8' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
