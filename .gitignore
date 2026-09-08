@@ -1,0 +1,8 @@
+node_modules/
+protohub-desktop/
+proto-note-main/
+.vscode/
+.agents/
+.mcp.json
+dist/
+.DS_Store
