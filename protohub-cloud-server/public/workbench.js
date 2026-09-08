@@ -299,7 +299,7 @@ class WorkbenchApp {
     this.dom.btnExportSingle.addEventListener('click', () => this.exportSingleHtml());
 
     // 监听官方标注编辑器与审阅引擎事件
-    window.addEventListener('message', (e) => {
+    window.addEventListener('message', async (e) => {
       if (!e.data) return;
       if (e.data.type === 'APPLY_ANNOTATIONS') {
         const nextData = e.data.nextData;
@@ -1542,6 +1542,19 @@ ${chosenName}`);
   }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  window.app = new WorkbenchApp();
-});
+function initWorkbenchApp() {
+  if (!window.app) {
+    try {
+      window.app = new WorkbenchApp();
+      console.log('[ProtoHub] ✅ 工作台已成功初始化');
+    } catch (e) {
+      console.error('[ProtoHub] 初始化异常:', e);
+    }
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initWorkbenchApp);
+} else {
+  initWorkbenchApp();
+}
